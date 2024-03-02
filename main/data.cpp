@@ -169,6 +169,9 @@ esp_err_t StopsData::Load()
                  esp_http_client_get_status_code(client),
                  esp_http_client_get_content_length(client));
         for (const auto& line : data) {
+            for (const auto& stop : data[line.first]) {
+                delete stop;
+            }
             data[line.first].clear();
         }
         data.clear();
