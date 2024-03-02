@@ -1,0 +1,12 @@
+menu "OVStops"
+
+    menuconfig OVS_WIFI_SSID
+        string "WiFI SSID"
+
+    menuconfig OVS_WIFI_PASSWORD
+        string "WiFI password"
+    
+    menuconfig OVS_WORKER_URL
+        string "Ovstops Cloudflare Worker URL"
+        
+endmenu
