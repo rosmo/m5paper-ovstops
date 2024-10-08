@@ -5,6 +5,8 @@
 Displays a constantly updating real-time information from `ovapi.nl` for your desired tram/bus lines
 using a M5Paper device. Uses a Cloudflare Worker to pre-process the information. 
 
+Built with ESP-IDF 5 (❤️), lvgl, LovyanGFX. 
+
 ## Requires
 
 - M5Paper
@@ -22,3 +24,14 @@ idf.py menuconfig
 idf.py build
 idf.py -p com3 flash
 ```
+
+## Custom fonts
+
+For discerning folks, you'll want to have your own font. It's an ePaper device after all.
+See the `Makefile` for automated font conversion and download fonts from [fonts.google.com](https://fonts.google.com) or
+your favorite TTF source. You'll need `lv_font_conv` from: [https://github.com/lvgl/lv_font_conv](https://github.com/lvgl/lv_font_conv).
+
+## Notes
+
+There is probably a small memory leak still somewhere, so the device will reboot by itself every now
+and then.
