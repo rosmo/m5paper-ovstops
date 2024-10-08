@@ -2,6 +2,9 @@
 
 ![M5Paper](img/m5paper.jpg)
 
+Displays a constantly updating real-time information from `ovapi.nl` for your desired tram/bus lines
+using a M5Paper device. Uses a Cloudflare Worker to pre-process the information. 
+
 ## Requires
 
 - M5Paper
