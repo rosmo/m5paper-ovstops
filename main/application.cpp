@@ -3,8 +3,6 @@
 #define TAG "Application"
 
 bool OvstopsApplication::init() {
-    ESP_LOGI(TAG, "Initializing LVGL!");
-    LVGL.initialize();
     return true;
 }
 
@@ -13,6 +11,7 @@ void OvstopsApplication::setupStyles() {
         &defaultStyle,
         &devStyle,
         &lineNumberStyle,
+        &lineNumberBoxStyle,
         &destinationStyle,
         &stopNameStyle,
         &bigStatusStyle,
@@ -21,6 +20,7 @@ void OvstopsApplication::setupStyles() {
         &statusStyle,
         &estimatedStyle,
         &differenceStyle,
+        &errorStyle,
     };
     for (lv_style_t *st : allStyles) {
         lv_style_init(st);
@@ -36,8 +36,12 @@ void OvstopsApplication::setupStyles() {
     
     lv_style_set_text_font(&lineNumberStyle, APP_FONT_BOLD(96));
     lv_style_set_border_width(&lineNumberStyle, 2);
+    lv_style_set_text_color(&lineNumberStyle, lv_color_white());
     lv_style_set_text_font(&destinationStyle, APP_FONT_BOLD(42));
     lv_style_set_text_font(&stopNameStyle, APP_FONT(36));
+
+    lv_style_set_bg_color(&lineNumberBoxStyle, lv_color_black());
+    lv_style_set_bg_opa(&lineNumberBoxStyle, LV_OPA_100);
 
     lv_style_set_text_font(&bigStatusStyle, APP_FONT(40));
     lv_style_set_text_font(&bigEstimatedStyle, APP_FONT(40));
@@ -64,7 +68,10 @@ LineView::LineView(OvstopsApplication *app, lv_obj_t *parent) {
     lv_obj_set_flex_flow(top, LV_FLEX_FLOW_ROW);
     lv_obj_add_style(top, &app->defaultStyle, 0);
 
-    lineLabel = lv_label_create(top);
+    lineContainer = lv_obj_create(top);
+    lv_obj_add_style(lineContainer, &app->lineNumberBoxStyle, 0);
+
+    lineLabel = lv_label_create(lineContainer);
     lv_label_set_text(lineLabel, "5");
     lv_obj_align(lineLabel, LV_ALIGN_CENTER, 0, 0);
     lv_obj_add_style(lineLabel, &app->lineNumberStyle, 0);
@@ -181,6 +188,10 @@ LineView::~LineView() {
 
 void OvstopsApplication::updateData() {
     std::map<std::string, std::vector<StopData*>> *linesData = stopsData.GetData();
+    if (linesData == NULL) {
+        ESP_LOGW(TAG, "Line data not loaded...");
+        return;
+    }
     for (const auto& [lineId, stops] : *linesData) {
         LineView *lineView;
         if (auto search = lines.find(lineId); search != lines.end()) {
@@ -195,35 +206,78 @@ void OvstopsApplication::updateData() {
     }
 }
 
-bool OvstopsApplication::setup() {
-    stopsData.SetUrl(CONFIG_OVS_WORKER_URL);
-    stopsData.SetNotifyTask(xTaskGetCurrentTaskHandle());
-    stopsData.Start();
-    
+void OvstopsApplication::setupErrorScreen() {
+    errorContainer = lv_obj_create(errorScreen);
+    lv_obj_align(errorContainer, LV_ALIGN_CENTER, 0, 100);
+    lv_obj_set_size(errorContainer, LV_PCT(100), LV_PCT(100));
+    // lv_obj_set_flex_flow(errorContainer, LV_FLEX_FLOW_COLUMN);
+
+    errorLabel = lv_label_create(errorContainer);
+    lv_label_set_text(errorLabel, "Loading data...");
+    lv_obj_align(errorLabel, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_add_style(errorLabel, &errorStyle, 0);
+    lv_obj_set_style_text_align(errorLabel, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_label_set_long_mode(errorLabel, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(errorLabel, LV_PCT(100));
+}
+
+bool OvstopsApplication::setup() {    
     createScreen();
     setupStyles();
+    setupErrorScreen();
+
     rootContainer = lv_obj_create(screen);
     lv_obj_align(rootContainer, LV_ALIGN_TOP_MID, 0, 5);
     lv_obj_set_size(rootContainer, LV_PCT(100), LV_PCT(100));
     lv_obj_set_flex_flow(rootContainer, LV_FLEX_FLOW_COLUMN);
     // lv_obj_set_flex_align(rootContainer, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_SPACE_AROUND);
-
-    updateData();
     
     return true;
 }
 
 void OvstopsApplication::run() {
-    uint32_t receivedValue;
+    void *receivedValue;
+    TickType_t startTicks, currentTicks;
+    TickType_t redrawStartTicks;
 
+    startTicks = xTaskGetTickCount();
+    redrawStartTicks = xTaskGetTickCount();
     show();
+
+    stopsData.SetUrl(CONFIG_OVS_WORKER_URL);
+    stopsData.SetNotifyTask(xTaskGetCurrentTaskHandle());
+    stopsData.Start();
+    updateData();
+
+    ESP_LOGI(TAG, "Starting run loop...");
     while (true) {
         vTaskDelay(50 / portTICK_PERIOD_MS);
         LVGL.timer(50);
         // Wait for updated data
-        if (xTaskNotifyWait(0, ULONG_MAX, &receivedValue, 50 / portTICK_PERIOD_MS) == pdPASS) {
-            ESP_LOGI(TAG, "New data received, updating...");
-            updateData();
+        if (xTaskNotifyWait(0, ULONG_MAX, (uint32_t *)&receivedValue, 50 / portTICK_PERIOD_MS) == pdPASS) {
+            ESP_LOGI(TAG, "Received notification from HTTP task...");
+            if (receivedValue == NULL) {
+                ESP_LOGI(TAG, "New data received, updating...");
+                updateData();
+                ::lv_scr_load(screen);
+            } else {
+                ESP_LOGI(TAG, "Error received: %s", (char *)receivedValue);
+                ::lv_scr_load(errorScreen);
+                lv_label_set_text(errorLabel, (char *)receivedValue);
+            }
+        }
+        currentTicks = xTaskGetTickCount();
+        if (((currentTicks - startTicks) * portTICK_PERIOD_MS) >= (RESTART_AFTER * 1000)) {
+            ESP_LOGW(TAG, "Restarting device after %d seconds.", RESTART_AFTER);
+            vTaskDelay(2000 / portTICK_PERIOD_MS);
+            esp_restart();
+        }
+        if (((currentTicks - redrawStartTicks) * portTICK_PERIOD_MS) >= (REDRAW_AFTER * 1000)) {
+            
+            ESP_LOGW(TAG, "Refreshing screen after %d seconds.", REDRAW_AFTER);
+            LVGL.refresh();
+            lv_obj_invalidate(lv_scr_act());
+            redrawStartTicks = currentTicks;
         }
     }
 }

@@ -17,6 +17,9 @@
 #include "nv_config.hpp"
 #include "application.hpp"
 #include "network.hpp"
+#include "syslog.hpp"
+
+#include "m5epd_lvgl.h"
 
 #define TAG "Main"
 
@@ -83,6 +86,11 @@ extern "C" void app_main(void) {
     wifi.SetPassword(CONFIG_OVS_WIFI_PASSWORD);
     ESP_LOGI(TAG, "Connecting to WiFi, SSID: %s", CONFIG_OVS_WIFI_SSID);
     wifi.Connect();
+
+    init_logging();
+
+    ESP_LOGI(TAG, "Initializing LVGL!");
+    LVGL.initialize();
 
     // Create application task on core 0
     xTaskCreatePinnedToCore(run_application, "application", 4096, NULL, 1, NULL, 0);

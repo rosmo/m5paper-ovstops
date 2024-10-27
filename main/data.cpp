@@ -5,6 +5,10 @@
 
 #define DATA_LOAD_FREQUENCY 45
 
+#define HTTP_ERROR_SIZE 512
+
+char httpError[HTTP_ERROR_SIZE] = { 0 };
+
 void StopsData::SetUrl(const char *url) {
     dataUrl = url;
 }
@@ -20,6 +24,7 @@ esp_err_t StopsData::HttpEventHandler(esp_http_client_event_t *evt)
     switch (evt->event_id)
     {
     case HTTP_EVENT_ERROR:
+        snprintf(httpError, HTTP_ERROR_SIZE, "HTTP error");
         ESP_LOGI(TAG, "HTTP: error!");
         break;
     case HTTP_EVENT_ON_CONNECTED:
@@ -165,9 +170,18 @@ esp_err_t StopsData::Load()
     err = esp_http_client_perform(client);
     if (err == ESP_OK)
     {
+        int statusCode = esp_http_client_get_status_code(client);
         ESP_LOGI(TAG, "HTTP GET Status = %d, content_length = %" PRIu64,
-                 esp_http_client_get_status_code(client),
+                 statusCode,
                  esp_http_client_get_content_length(client));
+
+        if (statusCode < 200 || statusCode >= 400) {
+            snprintf(httpError, HTTP_ERROR_SIZE, "HTTP error, status: %d", statusCode);
+            xTaskNotify(task, (uint32_t)httpError, eSetValueWithOverwrite);
+            return ESP_OK;
+        } else {
+            memset(httpError, 0, HTTP_ERROR_SIZE);
+        }
         for (const auto& line : data) {
             for (const auto& stop : data[line.first]) {
                 delete stop;
@@ -198,9 +212,11 @@ esp_err_t StopsData::Load()
 
         static uint32_t valueToSend = 0;
         ESP_LOGI(TAG, "Notifying main thread that data has been updated.");
-        xTaskNotify(task, valueToSend, eSetValueWithoutOverwrite);
+        xTaskNotify(task, valueToSend, eSetValueWithOverwrite);
     } else {
         ESP_LOGE(TAG, "HTTP GET request failed: %s", esp_err_to_name(err));
+        snprintf(httpError, HTTP_ERROR_SIZE, "HTTP error, status: %s", esp_err_to_name(err));
+        xTaskNotify(task, (uint32_t)httpError, eSetValueWithOverwrite);
     }
     free(local_response_buffer);
     esp_http_client_cleanup(client);
@@ -209,9 +225,12 @@ esp_err_t StopsData::Load()
 }
 
 std::map<std::string, std::vector<StopData*>> *StopsData::GetData() {
-    while (!loaded) {
-        vTaskDelay(50 / portTICK_PERIOD_MS);
+    if (!loaded) {
+        return NULL;
     }
+//    while (!loaded) {
+//        vTaskDelay(50 / portTICK_PERIOD_MS);
+//    }
     return &data;
 }
 

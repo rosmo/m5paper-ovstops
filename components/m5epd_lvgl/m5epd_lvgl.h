@@ -23,6 +23,7 @@ class M5_LVGL {
         bool initialize(int rotation = 0);
         void timer(int ticks);
 
+        void refresh();
     private:
         lv_disp_draw_buf_t drawBuffer;
         lv_color_t buf[M5EPD_PANEL_H * 20];

@@ -66,9 +66,11 @@ namespace lgfx
   {
     r &= 7;
     _rotation = r;
+    _internal_rotation = ((r + _cfg.offset_rotation) & 3) | ((r & 4) ^ (_cfg.offset_rotation & 4));
+
     auto pw = _cfg.panel_width;
     auto ph = _cfg.panel_height;
-    if (r & 1)
+    if (_internal_rotation & 1)
     {
       std::swap(pw, ph);
     }
@@ -96,7 +98,7 @@ namespace lgfx
 
   void Panel_FrameBufferBase::drawPixelPreclipped(uint_fast16_t x, uint_fast16_t y, uint32_t rawcolor)
   {
-    uint_fast8_t r = _rotation;
+    uint_fast8_t r = _internal_rotation;
     if (r)
     {
       if ((1u << r) & 0b10010110) { y = _height - (y + 1); }
@@ -114,7 +116,7 @@ namespace lgfx
 
   void Panel_FrameBufferBase::writeFillRectPreclipped(uint_fast16_t x, uint_fast16_t y, uint_fast16_t w, uint_fast16_t h, uint32_t rawcolor)
   {
-    uint_fast8_t r = _rotation;
+    uint_fast8_t r = _internal_rotation;
     if (r)
     {
       if ((1u << r) & 0b10010110) { y = _height - (y + h); }
@@ -156,7 +158,7 @@ namespace lgfx
   {
     uint32_t addx = param->src_x32_add;
     uint32_t addy = param->src_y32_add;
-    uint_fast8_t r = _rotation;
+    uint_fast8_t r = _internal_rotation;
     uint_fast8_t bitr = 1u << r;
     // if (bitr & 0b10011100)
     // {
@@ -196,16 +198,19 @@ namespace lgfx
     uint_fast16_t ye = _ye;
     uint_fast16_t x = _xpos;
     uint_fast16_t y = _ypos;
-    // const size_t bits = _write_bits;
+    const size_t bytes = _write_bits >> 3;
     // auto k = _bitwidth * bits >> 3;
 
-    uint_fast8_t r = _rotation;
+    uint_fast8_t r = _internal_rotation;
     if (!r)
     {
       uint_fast16_t linelength;
       do {
         linelength = std::min<uint_fast16_t>(xe - x + 1, length);
-        param->fp_copy(_lines_buffer[y], x, x + linelength, param);
+        auto ptr = &_lines_buffer[y][x * bytes];
+        param->fp_copy(ptr, 0, linelength, param);
+        cacheWriteBack(ptr, bytes * linelength);
+
         if ((x += linelength) > xe)
         {
           x = xs;
@@ -240,6 +245,7 @@ namespace lgfx
     }
     else
     {
+      int w = abs((int)(xe - xs)) + 1;
       do
       {
         param->fp_copy(_lines_buffer[y], x, x + 1, param);
@@ -250,6 +256,7 @@ namespace lgfx
         else
         {
           x = xs;
+          cacheWriteBack(&_lines_buffer[y][x], bytes * w);
           y = (y != ye) ? (y + ay) : ys;
         }
       } while (--length);
@@ -263,18 +270,19 @@ namespace lgfx
 
   void Panel_FrameBufferBase::writeImage(uint_fast16_t x, uint_fast16_t y, uint_fast16_t w, uint_fast16_t h, pixelcopy_t* param, bool)
   {
-    uint_fast8_t r = _rotation;
+    uint_fast8_t r = _internal_rotation;
     if (r == 0 && param->transp == pixelcopy_t::NON_TRANSP && param->no_convert)
     {
       auto bits = _write_bits;
       x = x * bits >> 3;
       w = w * bits >> 3;
       auto sw = param->src_bitwidth * bits >> 3;
-      auto src = &((uint8_t*)param->src_data)[param->src_y * sw + param->src_x];
+      auto src = &((uint8_t*)param->src_data)[param->src_y * sw + (param->src_x * bits >> 3)];
       h += y;
       do
       {
         memcpy(&_lines_buffer[y][x], src, w);
+        cacheWriteBack(&_lines_buffer[y][x], w);
         src += sw;
       } while (++y != h);
       return;
@@ -288,6 +296,7 @@ namespace lgfx
     }
     uint32_t sx32 = param->src_x32;
     uint32_t sy32 = param->src_y32;
+    uint_fast8_t bytes = _write_bits >> 3;
     h += y;
     do
     {
@@ -297,6 +306,8 @@ namespace lgfx
          &&  end != (pos = param->fp_skip(                  pos, end, param)));
       param->src_x32 = (sx32 += nextx);
       param->src_y32 = (sy32 += nexty);
+      auto ptr = &_lines_buffer[y][x * bytes];
+      cacheWriteBack(ptr, bytes * end);
     } while (++y != h);
   }
 
@@ -304,7 +315,7 @@ namespace lgfx
   {
     uint32_t nextx = 0;
     uint32_t nexty = 1 << pixelcopy_t::FP_SCALE;
-    if (_rotation)
+    if (_internal_rotation)
     {
       _rotate_pixelcopy(x, y, w, h, param, nextx, nexty);
     }
@@ -314,9 +325,11 @@ namespace lgfx
     uint32_t pos = x;
     uint32_t end = pos + w;
     h += y;
+    uint_fast16_t wbytes = (w * _write_bits) >> 3;
     do
     {
       param->fp_copy(_lines_buffer[y], pos, end, param);
+      cacheWriteBack(&_lines_buffer[y][pos], wbytes);
       param->src_x32 = (sx32 += nextx);
       param->src_y32 = (sy32 += nexty);
     } while (++y < h);
@@ -324,7 +337,7 @@ namespace lgfx
 
   void Panel_FrameBufferBase::readRect(uint_fast16_t x, uint_fast16_t y, uint_fast16_t w, uint_fast16_t h, void* dst, pixelcopy_t* param)
   {
-    uint_fast8_t r = _rotation;
+    uint_fast8_t r = _internal_rotation;
     if (r == 0 && param->no_convert)
     {
       h += y;
@@ -386,7 +399,7 @@ namespace lgfx
 
   void Panel_FrameBufferBase::copyRect(uint_fast16_t dst_x, uint_fast16_t dst_y, uint_fast16_t w, uint_fast16_t h, uint_fast16_t src_x, uint_fast16_t src_y)
   {
-    uint_fast8_t r = _rotation;
+    uint_fast8_t r = _internal_rotation;
     if (r)
     {
       if ((1u << r) & 0b10010110) { src_y = _height - (src_y + h); dst_y = _height - (dst_y + h); }
@@ -407,6 +420,7 @@ namespace lgfx
       uint8_t* dst = &_lines_buffer[dst_y + pos][dst_x * bytes];
       memcpy(buf, src, len);
       memcpy(dst, buf, len);
+      cacheWriteBack(dst, len);
       pos += add;
     } while (--h);
   }

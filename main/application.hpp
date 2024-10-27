@@ -6,6 +6,8 @@
 
 #include "fonts.h"
 
+#define RESTART_AFTER (8 * 3600)
+#define REDRAW_AFTER  (15 * 60)
 #define NEXT_LINES_AMOUNT 3
 
 class OvstopsApplication;
@@ -25,6 +27,7 @@ class LineView {
         lv_obj_t *topRight;
         lv_obj_t *status;
 
+        lv_obj_t *lineContainer;
         lv_obj_t *lineLabel;
         lv_obj_t *destinationLabel;
         lv_obj_t *stopNameLabel;
@@ -56,12 +59,15 @@ class Application {
         
         void createScreen() {
              screen = lv_obj_create(NULL);
+             errorScreen = lv_obj_create(NULL);
         };
         void show() {
-            ::lv_scr_load(screen);
+            ::lv_scr_load(errorScreen);
         };
     protected:
         lv_obj_t *screen = NULL;
+        lv_obj_t *errorScreen = NULL;
+
 
 };
 
@@ -73,6 +79,7 @@ class OvstopsApplication : Application {
 
         lv_style_t defaultStyle;
         lv_style_t devStyle;
+        lv_style_t lineNumberBoxStyle;
         lv_style_t lineNumberStyle;
         lv_style_t destinationStyle;
         lv_style_t stopNameStyle;
@@ -83,6 +90,8 @@ class OvstopsApplication : Application {
         lv_style_t estimatedStyle;
         lv_style_t differenceStyle;
 
+        lv_style_t errorStyle;
+
     protected:
         StopsData stopsData;
 
@@ -91,7 +100,10 @@ class OvstopsApplication : Application {
 
         void setupStyles();
         void updateData();
+        void setupErrorScreen();
 
         lv_obj_t *rootContainer;
+        lv_obj_t *errorContainer;
+        lv_obj_t *errorLabel;
 };
 #endif

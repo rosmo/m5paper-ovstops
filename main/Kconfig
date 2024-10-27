@@ -8,5 +8,8 @@ menu "OVStops"
     
     menuconfig OVS_WORKER_URL
         string "Ovstops Cloudflare Worker URL"
-        
+
+    menuconfig OVS_SYSLOG_SERVER
+        string "Syslog server IP address (UDP)"
+    
 endmenu

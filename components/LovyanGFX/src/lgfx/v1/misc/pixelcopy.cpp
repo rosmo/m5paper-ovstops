@@ -36,8 +36,8 @@ namespace lgfx
     , dst_depth ( dst_depth_ )
     , src_data  ( src_data_   )
     , palette   ( src_palette_)
-    , src_mask  ( (1 << src_bits) - 1 )
-    , dst_mask  ( (1 << dst_bits) - 1 )
+    , src_mask  ( (1 << (src_depth_ & color_depth_t::bit_mask)) - 1 )
+    , dst_mask  ( (1 << (dst_depth_ & color_depth_t::bit_mask)) - 1 )
     , no_convert( src_depth_ == dst_depth_ )
     {
       if (dst_palette_ || dst_bits < 8) {
@@ -64,9 +64,12 @@ namespace lgfx
           if (src_depth == rgb565_2Byte) {
             fp_copy = pixelcopy_t::get_fp_copy_rgb_affine<swap565_t>(dst_depth);
             fp_skip = pixelcopy_t::skip_rgb_affine<swap565_t>;
-          } else { // src_depth == rgb332_1Byte:
+          } else if (src_depth == rgb332_1Byte) {
             fp_copy = pixelcopy_t::get_fp_copy_rgb_affine<rgb332_t >(dst_depth);
             fp_skip = pixelcopy_t::skip_rgb_affine<rgb332_t>;
+          } else { // src_depth == grayscale_8bit:
+            fp_copy = pixelcopy_t::get_fp_copy_rgb_affine<grayscale_t >(dst_depth);
+            fp_skip = pixelcopy_t::skip_rgb_affine<grayscale_t>;
           }
         }
       }
@@ -132,10 +135,10 @@ namespace lgfx
       {
         uint32_t alp = 0;
         uint32_t x = src_x32 >> FP_SCALE;
-        if (x < param->src_width)
+        if (x < static_cast<uint32_t>(param->src_width))
         {
           uint32_t y = src_y32 >> FP_SCALE;
-          if (y < param->src_height)
+          if (y < static_cast<uint32_t>(param->src_height))
           {
             uint32_t i = (x + y * src_bitwidth) * src_bits;
             alp = k * ((pgm_read_byte(&s[i >> 3]) >> (-((int32_t)i + src_bits) & 7)) & param->src_mask);

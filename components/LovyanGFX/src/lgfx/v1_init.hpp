@@ -32,6 +32,7 @@ Contributors:
 #include "v1/panel/Panel_ILI9163.hpp"
 #include "v1/panel/Panel_ILI9225.hpp"
 #include "v1/panel/Panel_ILI9341.hpp"
+#include "v1/panel/Panel_ILI9806.hpp"
 #include "v1/panel/Panel_ILI9342.hpp"
 #include "v1/panel/Panel_ILI948x.hpp"
 #include "v1/panel/Panel_NT35510.hpp"
@@ -57,6 +58,7 @@ Contributors:
 #include "v1/panel/Panel_M5UnitLCD.hpp"
 
 // TouchScreen
+#include "v1/touch/Touch_CST816S.hpp"
 #include "v1/touch/Touch_FT5x06.hpp"
 #include "v1/touch/Touch_GSLx680.hpp"
 #include "v1/touch/Touch_GT911.hpp"

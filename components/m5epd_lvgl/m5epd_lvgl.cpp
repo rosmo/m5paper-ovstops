@@ -4,6 +4,13 @@ bool M5_LVGL::initialized = false;
 lgfx::Panel_IT8951 *p = new lgfx::Panel_IT8951();
 lgfx::Touch_GT911 *t = new lgfx::Touch_GT911();
 
+void M5_LVGL::refresh() {
+    if (!gfx->init()) {
+        printf("LovyanGFX initialization failed!\n");
+        return;
+    }
+}
+
 void displayFlush(lv_disp_drv_t* disp, const lv_area_t* area, lv_color_t* color_p) {
     LGFX *_gfx = (LGFX *)disp->user_data;
 
@@ -29,8 +36,8 @@ void touchInput(lv_indev_drv_t *drv, lv_indev_data_t *data)
 {
     LGFX *_gfx = (LGFX *)drv->user_data;
     lgfx::touch_point_t tp;
-    std::uint8_t count;
-    static std::int32_t x, y;
+    uint8_t count;
+    static int32_t x, y;
     
     count = _gfx->getTouch(&tp);
     if (count > 0)

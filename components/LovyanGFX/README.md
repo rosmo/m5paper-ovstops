@@ -44,19 +44,29 @@ This library has the following advantages.
   - Composite video signal (NTSC, PAL) output (only ESP32)
 
 
-|        | SPI | I2C | 8bit Para |16bit Para | CVBS  |
-|:------:|:---:|:---:|:---------:|:---------:|:-----:|
-|ESP32   | HW  | HW  | HW (I2S)  | ---       |HW(I2S)|
-|ESP32-S2| HW  | HW  | HW (I2S)  | HW (I2S)  | ---   |
-|ESP32-S3| HW  | HW  |HW(LCD/CAM)|HW(LCD/CAM)| ---   |
-|ESP32-C3| HW  | HW  | SW        | ---       | ---   |
-|ESP8266 | HW  | SW  | ---       | ---       | ---   |
-|SAMD51  | HW  | HW  | ---       | ---       | ---   |
-|SAMD21  | HW  | HW  | ---       | ---       | ---   |
-|RP2040  | HW  | --- | ---       | ---       | ---   |
+|        | SPI | I2C | 8bit Para |16bit Para | RGB       | CVBS     |
+|:------:|:---:|:---:|:---------:|:---------:|:---------:|:--------:|
+|ESP32   | HW  | HW  | HW (I2S)  | ---       | ---       |HW(I2SDAC)|
+|ESP32-S2| HW  | HW  | HW (I2S)  | HW (I2S)  | ---       | ---      |
+|ESP32-S3| HW  | HW  |HW(LCD/CAM)|HW(LCD/CAM)|HW(LCD/CAM)| ---      |
+|ESP32-C3| HW  | HW  | SW        | ---       | ---       | ---      |
+|ESP8266 | HW  | SW  | ---       | ---       | ---       | ---      |
+|SAMD51  | HW  | HW  | ---       | ---       | ---       | ---      |
+|SAMD21  | HW  | HW  | ---       | ---       | ---       | ---      |
+|RP2040  | HW  | --- | ---       | ---       | ---       | ---      |
 
 ※ HW = HardWare Peripheral / SW = SoftWare implementation
 
+|        |TouchScreens|
+|:------:|:----------:|
+|ESP32   | supported  |
+|ESP32-S2| supported  |
+|ESP32-S3| supported  |
+|ESP32-C3| supported  |
+|ESP8266 | supported  |
+|SAMD51  | supported  |
+|SAMD21  | supported  |
+|RP2040  | ---        |
 
 対応環境 Supported environments
 ---------------
@@ -67,6 +77,7 @@ This library has the following advantages.
     - Arduino RP2040
 
   - ディスプレイ Displays
+    - GC9107 (M5AtomS3)
     - GC9A01
     - GDEW0154M09 (M5Stack CoreInk)
     - HX8357
@@ -78,6 +89,7 @@ This library has the following advantages.
     - ILI9486
     - ILI9488 (Makerfabs Touch with Camera)
     - IT8951 (M5Paper)
+    - NT35510/OTM8009A
     - R61529
     - RA8875
     - RM68120
@@ -96,6 +108,7 @@ This library has the following advantages.
     - M5Stack AtomDisplay
 
   - タッチスクリーン TouchScreens
+    - I2C CST816S
     - I2C FT5x06 (FT5206, FT5306, FT5406, FT6206, FT6236, FT6336, FT6436)
     - I2C GSLx680 (GSL1680)
     - I2C GT911
@@ -123,36 +136,43 @@ This library is also compatible with the above models and display panels with a 
 // 対応機種がボードマネージャに無い場合 ( TTGO T-Wristband や ESP-WROVER-KIT等 ) は、
 // LovyanGFX.hppのincludeより前に、define LGFX_～ の定義を記述してください。
 
-// #define LGFX_M5STACK               // M5Stack (Basic / Gray / Go / Fire)
-// #define LGFX_M5STACK_CORE2         // M5Stack Core2
-// #define LGFX_M5STACK_COREINK       // M5Stack CoreInk
-// #define LGFX_M5STICK_C             // M5Stick C / CPlus
-// #define LGFX_M5PAPER               // M5Paper
-// #define LGFX_M5TOUGH               // M5Tough
-// #define LGFX_ODROID_GO             // ODROID-GO
-// #define LGFX_TTGO_TS               // TTGO TS
-// #define LGFX_TTGO_TWATCH           // TTGO T-Watch
-// #define LGFX_TTGO_TWRISTBAND       // TTGO T-Wristband
-// #define LGFX_TTGO_TDISPLAY         // TTGO T-Display
-// #define LGFX_DDUINO32_XS           // DSTIKE D-duino-32 XS
-// #define LGFX_LOLIN_D32_PRO         // LoLin D32 Pro
-// #define LGFX_ESP_WROVER_KIT        // ESP-WROVER-KIT
-// #define LGFX_WIFIBOY_PRO           // WiFiBoy Pro
-// #define LGFX_WIFIBOY_MINI          // WiFiBoy mini
-// #define LGFX_MAKERFABS_TOUCHCAMERA // Makerfabs Touch with Camera
-// #define LGFX_MAKERFABS_MAKEPYTHON  // Makerfabs MakePython
-// #define LGFX_WT32_SC01             // Seeed WT32-SC01
-// #define LGFX_WIO_TERMINAL          // Seeed Wio Terminal
-// #define LGFX_PYBADGE               // Adafruit PyBadge
-// #define LGFX_ESPBOY                // ESPboy
+// #define LGFX_M5STACK                       // M5Stack M5Stack Basic / Gray / Go / Fire
+// #define LGFX_M5STACK_CORE2                 // M5Stack M5Stack Core2
+// #define LGFX_M5STACK_COREINK               // M5Stack M5Stack CoreInk
+// #define LGFX_M5STICK_C                     // M5Stack M5Stick C / CPlus
+// #define LGFX_M5PAPER                       // M5Stack M5Paper
+// #define LGFX_M5TOUGH                       // M5Stack M5Tough
+// #define LGFX_M5ATOMS3                      // M5Stack M5ATOMS3
+// #define LGFX_ODROID_GO                     // ODROID-GO
+// #define LGFX_TTGO_TS                       // TTGO TS
+// #define LGFX_TTGO_TWATCH                   // TTGO T-Watch
+// #define LGFX_TTGO_TWRISTBAND               // TTGO T-Wristband
+// #define LGFX_TTGO_TDISPLAY                 // TTGO T-Display
+// #define LGFX_DDUINO32_XS                   // DSTIKE D-duino-32 XS
+// #define LGFX_LOLIN_D32_PRO                 // LoLin D32 Pro
+// #define LGFX_LOLIN_S3_PRO                  // LoLin S3 Pro
+// #define LGFX_ESP_WROVER_KIT                // Espressif ESP-WROVER-KIT
+// #define LGFX_ESP32_S3_BOX                  // Espressif ESP32-S3-BOX
+// #define LGFX_ESP32_S3_BOX_LITE             // Espressif ESP32-S3-BOX Lite
+// #define LGFX_WIFIBOY_PRO                   // WiFiBoy Pro
+// #define LGFX_WIFIBOY_MINI                  // WiFiBoy mini
+// #define LGFX_MAKERFABS_TOUCHCAMERA         // Makerfabs Touch with Camera
+// #define LGFX_MAKERFABS_MAKEPYTHON          // Makerfabs MakePython
+// #define LGFX_MAKERFABS_TFT_TOUCH_SPI       // Makerfabs TFT Touch SPI
+// #define LGFX_MAKERFABS_TFT_TOUCH_PARALLEL16// Makerfabs TFT Touch Parallel 16
+// #define LGFX_WT32_SC01                     // Seeed WT32-SC01
+// #define LGFX_WIO_TERMINAL                  // Seeed Wio Terminal
+// #define LGFX_PYBADGE                       // Adafruit PyBadge
+// #define LGFX_FUNHOUSE                      // Adafruit FunHouse
+// #define LGFX_FEATHER_ESP32_S2_TFT          // Adafruit Feather ESP32 S2 TFT
+// #define LGFX_FEATHER_ESP32_S3_TFT          // Adafruit Feather ESP32 S3 TFT
+// #define LGFX_ESPBOY                        // ESPboy
+// #define LGFX_WYWY_ESP32S3_HMI_DEVKIT       // wywy ESP32S3 HMI DevKit
+// #define LGFX_SUNTON_ESP32_2432S028         // Sunton ESP32 2432S028
 
-  #define LGFX_AUTODETECT // 自動認識 (D-duino-32 XS, PyBadge はパネルID読取りが出来ないため自動認識の対象から外れています)
+  #define LGFX_AUTODETECT // 自動認識 (D-duino-32 XS, WT32-SC01, PyBadge はパネルID読取りが出来ないため自動認識の対象から外れています)
 
 // 複数機種の定義を行うか、LGFX_AUTODETECTを定義することで、実行時にボードを自動認識します。
-
-
-// v1.0.0 を有効にします(v0からの移行期間の特別措置です。これを書かない場合は旧v0系で動作します。)
-#define LGFX_USE_V1
 
 
 // ヘッダをincludeします。
@@ -543,7 +563,7 @@ TomThumb font : [3-clause BSD](src/lgfx/Fonts/GFXFF/TomThumb.h) Brian J. Swetlan
 実装予定 Unimplemented request
 ----------------
   - ディスプレイ Displays
-    - OTM8009A / NT35510
     - SEPS525
-
+    - LT7680A / LT7685
+    - RA8873 / RA8876
 

@@ -21,7 +21,13 @@ Contributors:
 
  #include <sdkconfig.h>
 
- #if defined (CONFIG_IDF_TARGET_ESP32C3)
+ #if defined (CONFIG_IDF_TARGET_ESP32C6)
+
+  #include "esp32/Light_PWM.hpp"
+  #include "esp32/Bus_SPI.hpp"
+  #include "esp32/Bus_I2C.hpp"
+
+ #elif defined (CONFIG_IDF_TARGET_ESP32C3)
 
   #include "esp32/Light_PWM.hpp"
   #include "esp32/Bus_SPI.hpp"
@@ -87,6 +93,11 @@ Contributors:
 #elif defined (ARDUINO)
 
 #include "arduino_default/Bus_SPI.hpp"
+
+#elif __has_include(<SDL2/SDL.h>) || __has_include(<SDL.h>)
+
+#include "sdl/Bus_I2C.hpp"
+#include "sdl/Panel_sdl.hpp"
 
 #endif
 

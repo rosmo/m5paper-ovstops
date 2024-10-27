@@ -40,6 +40,12 @@ Contributors:
   #define DMA_OUTFIFO_EMPTY_CH0      GDMA_OUTFIFO_EMPTY_L3_CH0
 #endif
 
+#if ( ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(5, 3, 0) )
+ #if !defined (LCD_CAM_LCD_UPDATE)
+  #define LCD_CAM_LCD_UPDATE LCD_CAM_LCD_UPDATE_REG
+ #endif
+#endif
+
 namespace lgfx
 {
  inline namespace v1
@@ -60,23 +66,18 @@ namespace lgfx
     _dev = getDev(port);
   }
 
-  static void _gpio_pin_init(int pin)
-  {
-    if (pin >= 0)
-    {
-      gpio_pad_select_gpio(pin);
-      gpio_hi(pin);
-      gpio_set_direction((gpio_num_t)pin, GPIO_MODE_OUTPUT);
-    }
-  }
-
   bool Bus_Parallel8::init(void)
   {
     _init_pin();
 
-    _gpio_pin_init(_cfg.pin_rd);
-    _gpio_pin_init(_cfg.pin_wr);
-    _gpio_pin_init(_cfg.pin_rs);
+    for (size_t i = 0; i < 3; ++i)
+    {
+      int32_t pin = _cfg.pin_ctrl[i];
+      if (pin < 0) { continue; }
+      gpio_pad_select_gpio(pin);
+      gpio_hi(pin);
+      gpio_set_direction((gpio_num_t)pin, GPIO_MODE_OUTPUT);
+    }
 
     gpio_matrix_out(_cfg.pin_rs, LCD_DC_IDX, 0, 0);
     gpio_matrix_out(_cfg.pin_wr, LCD_PCLK_IDX, 0, 0);
@@ -188,7 +189,7 @@ namespace lgfx
     // dev->lcd_user.lcd_bit_order = false;
     // dev->lcd_user.lcd_8bits_order = false;
 
-    dev->lcd_user.val = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_REG;
+    dev->lcd_user.val = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE;
 
     _cache_flip = _cache[0];
   }
@@ -222,7 +223,7 @@ namespace lgfx
       dev->lcd_cmd_val.lcd_cmd_value = data;
       data >>= 8;
       while (*reg_lcd_user & LCD_CAM_LCD_START) {}
-      *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
+      *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE | LCD_CAM_LCD_START;
     } while (--bytes);
     return true;
   }
@@ -239,20 +240,20 @@ namespace lgfx
       dev->lcd_cmd_val.lcd_cmd_value = data;
       data >>= 8;
       while (*reg_lcd_user & LCD_CAM_LCD_START) {}
-      *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
+      *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_UPDATE | LCD_CAM_LCD_START;
       if (0 == --bytes) { return; }
     }
 
     dev->lcd_cmd_val.lcd_cmd_value = (data & 0xFF) | (data << 8);
     while (*reg_lcd_user & LCD_CAM_LCD_START) {}
-    *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_CMD_2_CYCLE_EN | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
+    *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_CMD_2_CYCLE_EN | LCD_CAM_LCD_UPDATE | LCD_CAM_LCD_START;
     bytes >>= 1;
     if (--bytes)
     {
       data >>= 16;
       dev->lcd_cmd_val.lcd_cmd_value = (data & 0xFF) | (data << 8);
       while (*reg_lcd_user & LCD_CAM_LCD_START) {}
-      *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_CMD_2_CYCLE_EN | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
+      *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_CMD_2_CYCLE_EN | LCD_CAM_LCD_UPDATE | LCD_CAM_LCD_START;
     }
   }
 
@@ -356,7 +357,7 @@ namespace lgfx
       dev->lcd_cmd_val.lcd_cmd_value = data[0] | data[1] << 16;
       uint32_t cmd_val = data[2] | data[3] << 16;
       while (*reg_lcd_user & LCD_CAM_LCD_START) {}
-      *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_CMD_2_CYCLE_EN | LCD_CAM_LCD_UPDATE_REG | LCD_CAM_LCD_START;
+      *reg_lcd_user = LCD_CAM_LCD_CMD | LCD_CAM_LCD_CMD_2_CYCLE_EN | LCD_CAM_LCD_UPDATE | LCD_CAM_LCD_START;
 
       if (use_dma)
       {
@@ -381,7 +382,7 @@ namespace lgfx
       }
       dev->lcd_cmd_val.lcd_cmd_value = cmd_val;
       dev->lcd_misc.lcd_cd_data_set = !dc;
-      *reg_lcd_user = LCD_CAM_LCD_ALWAYS_OUT_EN | LCD_CAM_LCD_DOUT | LCD_CAM_LCD_CMD | LCD_CAM_LCD_CMD_2_CYCLE_EN | LCD_CAM_LCD_UPDATE_REG;
+      *reg_lcd_user = LCD_CAM_LCD_ALWAYS_OUT_EN | LCD_CAM_LCD_DOUT | LCD_CAM_LCD_CMD | LCD_CAM_LCD_CMD_2_CYCLE_EN | LCD_CAM_LCD_UPDATE;
       while (*reg_lcd_user & LCD_CAM_LCD_START) {}
       *reg_lcd_user = LCD_CAM_LCD_ALWAYS_OUT_EN | LCD_CAM_LCD_DOUT | LCD_CAM_LCD_CMD | LCD_CAM_LCD_CMD_2_CYCLE_EN | LCD_CAM_LCD_START;
     } while (length);

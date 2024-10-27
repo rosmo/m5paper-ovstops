@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <sys/param.h>
 #include <math.h>
+#include <algorithm>
+
 #include "cJSON.h"
 #include "esp_http_client.h"
 #include "esp_log.h"

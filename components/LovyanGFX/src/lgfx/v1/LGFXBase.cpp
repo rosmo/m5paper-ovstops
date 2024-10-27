@@ -19,7 +19,7 @@ Contributors:
 #include "LGFXBase.hpp"
 
 #include "../internal/limits.h"
-#include "../utility/miniz.h"
+#include "../utility/lgfx_miniz.h"
 #include "../utility/lgfx_pngle.h"
 #include "../utility/lgfx_qrcode.h"
 #include "../utility/lgfx_tjpgd.h"
@@ -29,6 +29,7 @@ Contributors:
 #include "misc/bitmap.hpp"
 
 #include <stdarg.h>
+#include <stdint.h>
 #include <math.h>
 #include <list>
 
@@ -44,8 +45,9 @@ namespace lgfx
  inline namespace v1
  {
 //----------------------------------------------------------------------------
-  static constexpr float deg_to_rad = 0.017453292519943295769236907684886;
-  static constexpr uint8_t FP_SCALE = 16;
+  static constexpr const float deg_to_rad = 0.017453292519943295769236907684886;
+  static constexpr const uint8_t FP_SCALE = 16;
+  static constexpr const uint8_t LGFX_ALPHABLEND_NONREADABLE_THRESH = 128;
 
   void LGFXBase::setColorDepth(color_depth_t depth)
   {
@@ -99,7 +101,9 @@ namespace lgfx
     if (y < 0) { h += y; y = 0; }
     if (h > height() - y) h = height() - y;
     if (h < 1) { y = 0; h = 0; }
+    startWrite();
     _panel->display(x, y, w, h);
+    endWrite();
   }
 
   void LGFXBase::getClipRect(int32_t *x, int32_t *y, int32_t *w, int32_t *h)
@@ -338,11 +342,11 @@ namespace lgfx
   void LGFXBase::drawEllipse(int32_t x, int32_t y, int32_t rx, int32_t ry)
   {
     if (ry == 0) {
-      drawFastHLine(x - rx, y, (ry << 2) + 1);
+      drawFastHLine(x - rx, y, (rx << 1) + 1);
       return;
     }
     if (rx == 0) {
-      drawFastVLine(x, y - ry, (rx << 2) + 1);
+      drawFastVLine(x, y - ry, (ry << 1) + 1);
       return;
     }
     if (rx < 0 || ry < 0) return;
@@ -387,11 +391,11 @@ namespace lgfx
   void LGFXBase::fillEllipse(int32_t x, int32_t y, int32_t rx, int32_t ry)
   {
     if (ry == 0) {
-      drawFastHLine(x - rx, y, (ry << 2) + 1);
+      drawFastHLine(x - rx, y, (rx << 1) + 1);
       return;
     }
     if (rx == 0) {
-      drawFastVLine(x, y - ry, (rx << 2) + 1);
+      drawFastVLine(x, y - ry, (ry << 1) + 1);
       return;
     }
     if (rx < 0 || ry < 0) return;
@@ -823,6 +827,71 @@ namespace lgfx
     endWrite();
   }
 
+
+  constexpr float LoAlphaTheshold = 1.0f / 32.0f;
+  constexpr float HiAlphaTheshold = 1.0f - LoAlphaTheshold;
+
+
+//----------------------------------------------------------------------------
+
+  // helper function for radial gradients
+  // calculates distance between two sets of coordinates
+  float pixelDistance( float x0, float y0, float x1, float y1 )
+  {
+    return sqrtf((x1-x0)*(x1-x0) + (y1-y0)*(y1-y0) );;
+  }
+
+  // Helper function for draw_gradient_wedgeline, inspired by TFT_eSPI
+  // Returns distance of px,py to closest part of a to b wedge
+  float wedgeLineDistance(float xpax, float ypay, float bax, float bay, float dr=0.0f)
+  {
+    float d = (xpax * bax + ypay * bay) / (bax * bax + bay * bay);
+    float h = d<0.0f ? 0.0f : d>1.0f ? 1.0f : d; // constrain( d, 0.0f, 1.0f );
+    float dx = xpax - bax * h, dy = ypay - bay * h;
+    return sqrtf(dx * dx + dy * dy) + h * dr;
+  }
+
+  // Helper function for draw_gradient_wedgeline()
+  // Constrains coordinates top-left{xlo,ylo}:bottom-right{xhi,yhi} to gfx writable area
+  bool LGFXBase::clampArea(int32_t *xlo, int32_t *ylo, int32_t *xhi, int32_t *yhi)
+  {
+    if ((*xlo >= width()) || (*ylo >= height())) return false;  // lowest coords are outside (higher) of viewport
+    if ((*xhi <  0)            || (*yhi <  0)) return false;  // highest coords are outside (lower) of viewport
+    // Adjust to lowest bounds
+    if (*xlo < 0) *xlo = 0;
+    if (*ylo < 0) *ylo = 0;
+    // Adjust to highest bounds
+    if (*xhi > width())  *xhi = width()  - 1;
+    if (*yhi > height()) *yhi = height() - 1;
+    return true; // Coords are adjusted and area is fully writable
+  }
+
+  rgb888_t LGFXBase::map_gradient( float value, float start, float end, const rgb888_t *colors, uint32_t colors_count )
+  {
+    if(!colors) return rgb888_t(0,0,0);
+    if(colors_count<=1) return colors[0]; // there's no point mapping to a single value, also avoid divide by zero
+    float indexFloat = float(value-start) / float(end-start) * float(colors_count-1);
+    int32_t paletteIndex = int32_t(indexFloat/1);
+    float distance = indexFloat - float(paletteIndex);
+    const float min_precision = 0.00000011920928955078125; // std::numeric_limits<float>::epsilon()
+    if( distance < min_precision ) {
+      return colors[paletteIndex];
+    } else {
+      rgb888_t color0 = colors[paletteIndex];
+      rgb888_t color1 = colors[paletteIndex+1];
+      uint8_t r1 = color0.R8(), g1 = color0.G8(), b1 = color0.B8();
+      uint8_t r2 = color1.R8(), g2 = color1.G8(), b2 = color1.B8();
+      return rgb888_t( r1 + distance*float(r2-r1), g1 + distance*float(g2-g1), b1 + distance*float(b2-b1) );
+    }
+  }
+
+  rgb888_t LGFXBase::map_gradient( float value, float start, float end, const colors_t gradient )
+  {
+    if(!gradient.colors) return rgb888_t(0,0,0);
+    if(gradient.count<=1) return gradient.colors[0]; // there's no point mapping to a single value, also avoid divide by zero
+    return map_gradient( value, start, end, gradient.colors, gradient.count );
+  }
+
   void LGFXBase::draw_gradient_line( int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint32_t colorstart, uint32_t colorend )
   {
     if ( colorstart == colorend || (x0 == x1 && y0 == y1)) {
@@ -872,8 +941,216 @@ namespace lgfx
     endWrite();
   }
 
-  constexpr float LoAlphaTheshold = 1.0f / 32.0f;
-  constexpr float HiAlphaTheshold = 1.0f - LoAlphaTheshold;
+  void LGFXBase::draw_gradient_line(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const colors_t gradient )
+  {
+    if(!gradient.colors || gradient.count==0) return;
+    if ( (x0 == x1 && y0 == y1) || gradient.count == 1 ) {
+      setColor(color888(gradient.colors[0].r, gradient.colors[0].g, gradient.colors[0].b));
+      drawLine( x0, y0, x1, y1 );
+      return;
+    }
+
+    bool steep = abs(y1 - y0) > abs(x1 - x0);
+    if (steep) { // swap axis
+      std::swap(x0, y0);
+      std::swap(x1, y1);
+    }
+
+    bool swapped = false;
+    if (x0 > x1) { // swap points
+      std::swap(x0, x1);
+      std::swap(y0, y1);
+      swapped = true;
+    }
+
+    int32_t dx = x1 - x0;
+    int32_t err = dx >> 1;
+    int32_t dy = abs(y1 - y0);
+    int32_t ystep = (y0 < y1) ? 1 : -1;
+
+    startWrite();
+    for (int32_t x = x0; x <= x1; x++) {
+      auto color = map_gradient( x, swapped?x1:x0, swapped?x0:x1, gradient );
+      setColor(color888(color.r, color.g, color.b));
+      writePixel( steep?y0:x, steep?x:y0 );
+      err -= dy;
+      if (err < 0) {
+        err += dx;
+        y0 += ystep;
+      }
+    }
+    endWrite();
+  }
+
+  void LGFXBase::draw_gradient_wedgeline(float ax, float ay, float bx, float by, float ar, float br, const colors_t gradient )
+  {
+    const bool is_circle = (ax==bx && ay==by /*&& ar==br*/ );
+    if( !gradient.colors || gradient.count==0 ) return; // line needs at least one color
+    if ( (ar < 0.0f) || (br < 0.0f) ) return; // don't negociate with infinity
+    if ( (fabsf(ax - bx) < 0.01f) && (fabsf(ay - by) < 0.01f) ) bx += 0.01f; // Avoid divide by zero
+    // convert first gradient color to RGB
+    rgb888_t fg_color = gradient.colors[0];
+    // Find line bounding box
+    int32_t x0 = (int32_t)floorf(fminf(ax-ar, bx-br));
+    int32_t x1 = (int32_t) ceilf(fmaxf(ax+ar, bx+br));
+    int32_t y0 = (int32_t)floorf(fminf(ay-ar, by-br));
+    int32_t y1 = (int32_t) ceilf(fmaxf(ay+ar, by+br));
+    // clamp coords to drawable area
+    if (!clampArea(&x0, &y0, &x1, &y1)) {
+      return;
+    }
+
+    constexpr float PixelAlphaGain = 255.0f;
+
+    setClipRect( x0, y0, x1, y1 );
+    startWrite();
+
+    // Establish x start and y start
+    int32_t ys = ay;
+    if ((ax-ar)>(bx-br)) ys = by;
+
+    float rdt = ar - br; // Radius delta
+    float alpha = 1.0f; // base alpha
+    ar += 0.5f; // center pixel
+    // line distance including rounded edges
+    float linedist = is_circle? (ar + br)*.5f : pixelDistance(ax, ay, bx, by) + ar + br;
+    float xpax, ypay, bax = bx - ax, bay = by - ay;
+
+    int32_t xs = x0; // Set x start to left side of box
+    // 1st pass: Scan bounding box from ys down, calculate pixel intensity from distance to line
+    for (int32_t yp = ys; yp <= y1; yp++) {
+      bool endX = false; // Flag to skip pixels
+      ypay = yp - ay;
+      for (int32_t xp = xs; xp <= x1; xp++) {
+        if (endX) if (alpha <= LoAlphaTheshold) break;  // Skip right side
+        xpax = xp - ax;
+        alpha = ar - wedgeLineDistance(xpax, ypay, bax, bay, rdt);
+        if (alpha <= LoAlphaTheshold ) continue;
+        // handle gradient
+        if( gradient.count>1 ) fg_color = map_gradient( pixelDistance(ax, ay, xp, yp), 0.0f, linedist, gradient );
+        // Track edge to minimise calculations
+        if (!endX) { endX = true; xs = xp; }
+        if (alpha > HiAlphaTheshold) {
+          setColor(color888(fg_color.r, fg_color.g, fg_color.b));
+          drawPixel(xp, yp);
+          continue;
+        }
+        fillRectAlpha(xp, yp, 1, 1, (uint8_t)(alpha * PixelAlphaGain), fg_color);
+      }
+    }
+
+    xs = x0; // Reset x start to left side of box
+    // 2nd pass: Scan bounding box from ys-1 up, calculate pixel intensity from distance to line
+    for (int32_t yp = ys-1; yp >= y0; yp--) {
+      bool endX = false; // Flag to skip pixels
+      ypay = yp - ay;
+      for (int32_t xp = xs; xp <= x1; xp++) {
+        if (endX) if (alpha <= LoAlphaTheshold) break;  // Skip right side of drawn line
+        xpax = xp - ax;
+        alpha = ar - wedgeLineDistance(xpax, ypay, bax, bay, rdt);
+        if (alpha <= LoAlphaTheshold ) continue;
+        // handle gradient
+        if( gradient.count>1 ) fg_color = map_gradient( pixelDistance(ax, ay, xp, yp), 0.0f, linedist, gradient );
+        // Track line boundary
+        if (!endX) { endX = true; xs = xp; }
+        if (alpha > HiAlphaTheshold) {
+          setColor(color888(fg_color.r, fg_color.g, fg_color.b));
+          drawPixel(xp, yp);
+          continue;
+        }
+        fillRectAlpha(xp, yp, 1, 1, (uint8_t)(alpha * PixelAlphaGain), fg_color);
+      }
+    }
+
+    endWrite();
+    clearClipRect();
+  }
+
+  void LGFXBase::draw_wedgeline(float ax, float ay, float bx, float by, float ar, float br, const uint32_t fg_color)
+  {
+    const rgb888_t color[1] = { fg_color }; // create a colors array with single color
+    auto gradient = createGradient( color ); // create single color gradient
+    draw_gradient_wedgeline(ax, ay, bx, by, ar, br, gradient ); // dispatch
+  }
+
+  void LGFXBase::fill_rect_radial_gradient(int32_t x, int32_t y, uint32_t w, uint32_t h, const colors_t gradient)
+  {
+      if( w<=1 || h<=1 || !gradient.colors || gradient.count==0 ) return;
+      if( gradient.count == 1 ) {
+        setColor(color888(gradient.colors[0].r, gradient.colors[0].g, gradient.colors[0].b));
+        fillRect(x, y, w, h);
+        return;
+      }
+      float major_side = std::max(w,h);
+      float midx   = (w-1)/2.0f;
+      float midy   = (h-1)/2.0f;
+      float vratio = h/major_side;
+      float hratio = w/major_side;
+      float fmidx  = midx*vratio;
+      float fmidy  = midy*hratio;
+      float hyp0   = pixelDistance( midx, midy, 0, 0 );
+
+      rgb888_t scanline[w];
+
+      startWrite();
+      for( int _y=0;_y<h;_y++ ) {
+        // only half of the scan line needs to be calculated, the other half is mirrored
+        for( int _x=0;_x<=w/2;_x++ ) {
+          auto distance       = pixelDistance( fmidx, fmidy, _x*vratio, _y*hratio );
+          scanline[_x]        = map_gradient( distance, 0, hyp0, gradient );
+          scanline[(w-1)-_x]  = scanline[_x];
+        }
+        pushImage( x, _y+y, w, 1, scanline );
+      }
+      endWrite();
+  }
+
+  void LGFXBase::fill_rect_radial_gradient(int32_t x, int32_t y, uint32_t w, uint32_t h, const uint32_t colorstart, const uint32_t colorend )
+  {
+    const rgb888_t colors[2] = { colorstart, colorend };
+    auto gradient = createGradient( colors );
+    fill_rect_radial_gradient(x, y, w, h, gradient );
+  }
+
+  void LGFXBase::fill_rect_linear_gradient(int32_t x, int32_t y, uint32_t w, uint32_t h, const colors_t gradient, fill_style_t style )
+  {
+    if( !gradient.colors || gradient.count==0 ) return;
+    bool is_vertical = style==VLINEAR;
+    const uint32_t gradient_len = is_vertical ? h : w;
+    rgb888_t scanline[gradient_len];
+    for(int i=0;i<gradient_len;i++) { // memoize one gradient scanline
+      scanline[i] = map_gradient( i, 0, gradient_len, gradient );
+    }
+    startWrite();
+    for( int ys=0;ys<h;ys++ ) {
+      if( is_vertical ) { // scanline is used as an colors index
+        setColor(color888(scanline[ys].r, scanline[ys].g, scanline[ys].b));
+        drawFastHLine( x, ys, w );
+      } else { // scanline is used as a line buffer
+        pushImage( x, y+ys, w, 1, scanline );
+      }
+    }
+    endWrite();
+  }
+
+  void LGFXBase::fill_rect_gradient(int32_t x, int32_t y, uint32_t w, uint32_t h, const colors_t gradient, fill_style_t style )
+  {
+    style==RADIAL
+      ? fill_rect_radial_gradient(x, y, w, h, gradient )
+      : fill_rect_linear_gradient(x, y, w, h, gradient, style )
+    ;
+  }
+
+  void LGFXBase::fill_rect_gradient(int32_t x, int32_t y, uint32_t w, uint32_t h, const uint32_t colorstart, const uint32_t colorend, fill_style_t style )
+  {
+    const rgb888_t colors[2] = {colorstart, colorend};
+    auto gradient = createGradient( colors );
+    fill_rect_gradient(x, y, w, h, gradient, style );
+  }
+
+//----------------------------------------------------------------------------
+
+
   void LGFXBase::fillSmoothRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r)
   {
     startWrite();
@@ -925,16 +1202,15 @@ namespace lgfx
     if (r1x < 0) return;
     if (r1y < 0) return;
 
-    bool equal = fabsf(start - end) < std::numeric_limits<float>::epsilon();
+    bool ring = fabsf(start - end) >= 360;
     start = fmodf(start, 360);
     end = fmodf(end, 360);
-    if (start < 0) start += 360.0f;
-    if (end < 0) end += 360.0f;
-
+    if (start < 0.0f) start = fmodf(start + 360.0f, 360);
+    if (end < 0.0f) end = fmodf(end + 360.0f, 360);
     startWrite();
     fill_arc_helper(x, y, r0x, r1x, r0y, r1y, start, start);
     fill_arc_helper(x, y, r0x, r1x, r0y, r1y, end, end);
-    if (!equal && (fabsf(start - end) <= 0.0001f)) { start = .0f; end = 360.0f; }
+    if (ring && (fabsf(start - end) <= 0.0001f)) { start = .0f; end = 360.0f; }
     fill_arc_helper(x, y, r0x, r0x, r0y, r0y, start, end);
     fill_arc_helper(x, y, r1x, r1x, r1y, r1y, start, end);
     endWrite();
@@ -947,12 +1223,12 @@ namespace lgfx
     if (r1x < 0) return;
     if (r1y < 0) return;
 
-    bool equal = fabsf(start - end) < std::numeric_limits<float>::epsilon();
+    bool ring = fabsf(start - end) >= 360;
     start = fmodf(start, 360);
     end = fmodf(end, 360);
-    if (start < 0) start += 360.0f;
-    if (end < 0) end += 360.0f;
-    if (!equal && (fabsf(start - end) <= 0.0001f)) { start = .0f; end = 360.0f; }
+    if (start < 0.0f) start = fmodf(start + 360.0f, 360);
+    if (end < 0.0f) end = fmodf(end + 360.0f, 360);
+    if (ring && (fabsf(start - end) <= 0.0001f)) { start = .0f; end = 360.0f; }
 
     startWrite();
     fill_arc_helper(x, y, r0x, r1x, r0y, r1y, start, end);
@@ -1359,10 +1635,10 @@ namespace lgfx
       if (left < right)
       {
         pc->src_x32 = iA[2] + left * iA[0];
-        if (static_cast<uint32_t>(pc->src_x) < pc->src_width)
+        if (static_cast<uint32_t>(pc->src_x) < static_cast<uint32_t>(pc->src_width))
         {
           pc->src_y32 = iA[5] + left * iA[3];
-          if (static_cast<uint32_t>(pc->src_y) < pc->src_height)
+          if (static_cast<uint32_t>(pc->src_y) < static_cast<uint32_t>(pc->src_height))
           {
             pc->src_x32_add = iA[0];
             pc->src_y32_add = iA[3];
@@ -1496,10 +1772,24 @@ namespace lgfx
       _panel->copyRect(dst_x, dst_y, w, h, src_x, src_y);
     }
 
-    if (     dx > 0) writeFillRectPreclipped(_sx           , dst_y,  dx, h);
-    else if (dx < 0) writeFillRectPreclipped(_sx + _sw + dx, dst_y, -dx, h);
-    if (     dy > 0) writeFillRectPreclipped(_sx, _sy           , _sw,  dy);
-    else if (dy < 0) writeFillRectPreclipped(_sx, _sy + _sh + dy, _sw, -dy);
+    int_fast16_t sx = _sx;
+    if (dy != 0)
+    {
+      int_fast16_t sy = _sy;
+      if (dy < 0) {
+        sy += _sh + dy;
+        dy = -dy;
+      }
+      writeFillRectPreclipped(sx, sy, _sw,  dy);
+    }
+    if (dx != 0)
+    {
+      if (dx < 0) {
+        sx += _sw + dx;
+        dx = -dx;
+      }
+      writeFillRectPreclipped(sx, dst_y,  dx, h);
+    }
     endWrite();
   }
 
@@ -2129,7 +2419,6 @@ namespace lgfx
     //_decoderState = utf8_decode_state_t::utf8_state0;
 
     font->getDefaultMetric(&_font_metrics);
-
   }
 
   /// load VLW font
@@ -2137,6 +2426,39 @@ namespace lgfx
   {
     _font_data.set(array);
     return load_font(&_font_data);
+  }
+
+  bool LGFXBase::load_font_with_path(const char *path)
+  {
+    this->unloadFont();
+
+    if (this->_font_file.get() == nullptr) return false;
+
+    this->prepareTmpTransaction(this->_font_file.get());
+    this->_font_file->preRead();
+
+    bool result = this->_font_file->open(path);
+    if (!result)
+    {
+      size_t alloclen = strlen(path) + 8;
+      auto filename = (char*)alloca(alloclen);
+      memset(filename, 0, alloclen);
+      filename[0] = '/';
+
+      strcpy(&filename[1], &path[(path[0] == '/') ? 1 : 0]);
+      int len = strlen(filename);
+      if (memcmp(&filename[len - 4], ".vlw", 4))
+      {
+        strcpy(&filename[len], ".vlw");
+      }
+      result = this->_font_file->open(filename);
+    }
+
+    if (result) {
+      result = this->load_font(this->_font_file.get());
+    }
+    this->_font_file->postRead();
+    return result;
   }
 
   bool LGFXBase::load_font(lgfx::DataWrapper* data)
@@ -2241,30 +2563,37 @@ namespace lgfx
       y = (height() - w) >> 1;
     }
 
-    setColor(0xFFFFFFU);
-    startWrite();
-    writeFillRect(x, y, w, w);
     for (; version <= 40; ++version)
     {
       QRCode qrcode;
       auto qrcodeData = (uint8_t*)alloca(lgfx_qrcode_getBufferSize(version));
       if (0 != lgfx_qrcode_initText(&qrcode, qrcodeData, version, 0, string)) continue;
       int_fast16_t thickness = w / qrcode.size;
-      if (!thickness) break;
       int_fast16_t lineLength = qrcode.size * thickness;
-      int_fast16_t xOffset = x + ((w - lineLength) >> 1);
-      int_fast16_t yOffset = y + ((w - lineLength) >> 1);
-      setColor(0);
-      y = 0;
-      do {
-        x = 0;
+      int_fast16_t offset = (w - lineLength) >> 1;
+      startWrite();
+      writeFillRect(x, y, w, offset, TFT_WHITE);
+      int_fast16_t dy = y + offset;
+      if (thickness)
+      {
+        int_fast16_t iy = 0;
         do {
-          if (lgfx_qrcode_getModule(&qrcode, x, y)) writeFillRect(x * thickness + xOffset, y * thickness + yOffset, thickness, thickness);
-        } while (++x < qrcode.size);
-      } while (++y < qrcode.size);
+          writeFillRect(x, dy, offset, thickness, TFT_WHITE);
+          int_fast16_t ix = 0;
+          int_fast16_t dx = x + offset;
+          do {
+            setColor(lgfx_qrcode_getModule(&qrcode, ix, iy) ? TFT_BLACK : TFT_WHITE);
+            writeFillRect(dx, dy, thickness, thickness);
+            dx += thickness;
+          } while (++ix < qrcode.size);
+          writeFillRect(dx, dy, x + w - dx, thickness, TFT_WHITE);
+          dy += thickness;
+        } while (++iy < qrcode.size);
+      }
+      writeFillRect(x, dy, w, y + w - dy, TFT_WHITE);
+      endWrite();
       break;
     }
-    endWrite();
   }
 
 //----------------------------------------------------------------------------
@@ -2533,6 +2862,8 @@ namespace lgfx
     int32_t y = rect->top;
     int32_t w = rect->right  - rect->left + 1;
     int32_t h = rect->bottom - rect->top + 1;
+    jpeg->pc->src_x32_add = 1 << FP_SCALE;
+    jpeg->pc->src_y32_add = 0;
     jpeg->gfx->pushImage( jpeg->x + x
                         , jpeg->y + y
                         , w
@@ -2695,37 +3026,58 @@ namespace lgfx
     bool hasAlpha = (idx != len);
     if (hasAlpha)
     {
-      if (p->lineBuffer == nullptr)
+      if (p->gfx->isReadable())
       {
-        p->lineBuffer = (bgra8888_t*)heap_alloc_dma(sizeof(bgra8888_t) * p->maxWidth);
-      }
-      p->gfx->readRect(p->x, p->y + y0, p->maxWidth, 1, p->lineBuffer);
-      do
-      {
-        uint_fast8_t a = argb[0];
-        if (a) {
-          if (a == 255) {
-            p->lineBuffer[x].set(*(uint32_t*)argb);
-          } else {
-            auto data = &p->lineBuffer[x];
-            uint_fast8_t inv = 255 - a;
-            data->set( (argb[1] * a + data->r * inv + 255) >> 8
-                     , (argb[2] * a + data->g * inv + 255) >> 8
-                     , (argb[3] * a + data->b * inv + 255) >> 8
-                     );
-          }
+        if (p->lineBuffer == nullptr)
+        {
+          p->lineBuffer = (bgra8888_t*)heap_alloc_dma(sizeof(bgra8888_t) * p->maxWidth);
         }
-        x += div_x;
-        if ((int32_t)x >= p->maxWidth) break;
-        argb += 4;
-      } while (--len);
-      p->pc->src_data = p->lineBuffer;
-      p->gfx->pushImage(p->x, p->y + y0, p->maxWidth, 1, p->pc, false);
+        p->gfx->readRect(p->x, p->y + y0, p->maxWidth, 1, p->lineBuffer);
+        do
+        {
+          uint_fast8_t a = argb[0];
+          if (a) {
+            if (a == 255) {
+              p->lineBuffer[x].set(*(uint32_t*)argb);
+            } else {
+              auto data = &p->lineBuffer[x];
+              uint_fast8_t inv = 255 - a;
+              data->set( (argb[1] * a + data->r * inv + 255) >> 8
+                      , (argb[2] * a + data->g * inv + 255) >> 8
+                      , (argb[3] * a + data->b * inv + 255) >> 8
+                      );
+            }
+          }
+          x += div_x;
+          if ((int32_t)x >= p->maxWidth) break;
+          argb += 4;
+        } while (--len);
+        p->pc->src_data = p->lineBuffer;
+        p->pc->src_x32_add = 1 << FP_SCALE;
+        p->pc->src_y32_add = 0;
+        p->gfx->pushImage(p->x, p->y + y0, p->maxWidth, 1, p->pc, false);
+      }
+      else
+      {
+        do
+        {
+          if (argb[0] > LGFX_ALPHABLEND_NONREADABLE_THRESH)
+          {
+            p->gfx->setColor(color888(argb[1], argb[2], argb[3]));
+            p->gfx->writeFillRectPreclipped(p->x + x, p->y + y0, 1, 1);
+          }
+          x += div_x;
+          if ((int32_t)x >= p->maxWidth) break;
+          argb += 4;
+        } while (--len);
+      }
     }
     else
     if (div_x == 1)
     {
       p->pc->src_data = argb;
+      p->pc->src_x32_add = 1 << FP_SCALE;
+      p->pc->src_y32_add = 0;
       p->gfx->pushImage(p->x + x, p->y + y0, len, 1, p->pc, false);
     }
     else
@@ -2783,55 +3135,76 @@ namespace lgfx
     bool hasAlpha = (idx != len);
     if (hasAlpha)
     {
-// ESP_LOGE("TR","alpha:%d", argb[idx * 4 + 3]);
-    //   uint32_t left = idx;
-    //   idx = len;
-    //   while (idx-- && (0 == argb[idx * 4 + 3] || argb[idx * 4 + 3] == 255));
-    //   uint32_t right = idx;
-      do
+      if (p->gfx->isReadable())
       {
-        p->gfx->readRect(p->x, p->y + y0, p->maxWidth, 1, p->lineBuffer);
-        const uint8_t* argbbuf = argb;
-        size_t loop = len;
-        size_t xtmp = x;
         do
         {
-          int32_t l = ceilf( xtmp      * p->zoom_x) - p->offX;
+          p->gfx->readRect(p->x, p->y + y0, p->maxWidth, 1, p->lineBuffer);
+          const uint8_t* argbbuf = argb;
+          size_t loop = len;
+          size_t xtmp = x;
+          do
+          {
+            int32_t l = ceilf( xtmp      * p->zoom_x) - p->offX;
+            if (l < 0) l = 0;
+            int32_t r = ceilf((xtmp + 1) * p->zoom_x) - p->offX;
+            if (r > p->maxWidth) r = p->maxWidth;
+            if (l < r)
+            {
+              uint_fast8_t a = argbbuf[0];
+              if (a) {
+                if (a == 255)
+                {
+                  do
+                  {
+                    p->lineBuffer[l].set(*(uint32_t*)argbbuf);
+                  } while (++l < r);
+                }
+                else
+                {
+                  uint_fast8_t inv = 255 - a;
+                  size_t ar = argbbuf[1] * a + 255;
+                  size_t ag = argbbuf[2] * a + 255;
+                  size_t ab = argbbuf[3] * a + 255;
+                  do
+                  {
+                    auto data = &p->lineBuffer[l];
+                    data->set( (ar + data->r * inv) >> 8
+                            , (ag + data->g * inv) >> 8
+                            , (ab + data->b * inv) >> 8);
+                  } while (++l < r);
+                }
+              }
+            }
+            argbbuf += 4;
+            xtmp += div_x;
+          } while (--loop);
+          p->pc->src_x32_add = 1 << FP_SCALE;
+          p->pc->src_y32_add = 0;
+          p->gfx->pushImage(p->x, p->y + y0, p->maxWidth, 1, p->pc, true);
+        } while (++y0 != y1);
+      }
+      else
+      {
+        size_t h = y1 - y0;
+        do
+        {
+          int32_t l = ceilf( x      * p->zoom_x) - p->offX;
           if (l < 0) l = 0;
-          int32_t r = ceilf((xtmp + 1) * p->zoom_x) - p->offX;
+          int32_t r = ceilf((x + 1) * p->zoom_x) - p->offX;
           if (r > p->maxWidth) r = p->maxWidth;
           if (l < r)
           {
-            uint_fast8_t a = argbbuf[0];
-            if (a) {
-              if (a == 255)
-              {
-                do
-                {
-                  p->lineBuffer[l].set(*(uint32_t*)argbbuf);
-                } while (++l < r);
-              }
-              else
-              {
-                uint_fast8_t inv = 255 - a;
-                size_t ar = argbbuf[1] * a + 255;
-                size_t ag = argbbuf[2] * a + 255;
-                size_t ab = argbbuf[3] * a + 255;
-                do
-                {
-                  auto data = &p->lineBuffer[l];
-                  data->set( (ar + data->r * inv) >> 8
-                           , (ag + data->g * inv) >> 8
-                           , (ab + data->b * inv) >> 8);
-                } while (++l < r);
-              }
+            if (argb[0] > LGFX_ALPHABLEND_NONREADABLE_THRESH)
+            {
+              p->gfx->setColor(color888(argb[1], argb[2], argb[3]));
+              p->gfx->writeFillRectPreclipped(p->x + l, p->y + y0, r - l, h);
             }
           }
-          argbbuf += 4;
-          xtmp += div_x;
-        } while (--loop);
-        p->gfx->pushImage(p->x, p->y + y0, p->maxWidth, 1, p->pc, true);
-      } while (++y0 != y1);
+          argb += 4;
+          x += div_x;
+        } while (--len);
+      }
     }
     else
     if (div_x == 1)
@@ -2854,6 +3227,8 @@ namespace lgfx
         ++x;
       } while (--len);
       do {
+        p->pc->src_x32_add = 1 << FP_SCALE;
+        p->pc->src_y32_add = 0;
         p->gfx->pushImage(p->x, p->y + y0, p->maxWidth, 1, p->pc, true);
       } while (++y0 != y1);
 /*/
@@ -2888,9 +3263,24 @@ namespace lgfx
     }
   }
 
+
+  static pngle_t* pngle = nullptr;
+  void LGFXBase::releasePngMemory(void)
+  {
+    if (pngle) {
+      lgfx_pngle_destroy(pngle);
+      pngle = nullptr;
+    }
+  }
+
   bool LGFXBase::draw_png(DataWrapper* data, int32_t x, int32_t y, int32_t maxWidth, int32_t maxHeight, int32_t offX, int32_t offY, float zoom_x, float zoom_y, datum_t datum)
   {
-    pngle_t *pngle = lgfx_pngle_new();
+    /// PNG描画を繰り返し使用した場合、pngleのメモリ確保に失敗するケースがある。
+    /// そのため、pngle使用後に解放せず、再利用できる構成に変更した。
+    /// メモリを明示的に解放したい場合は releasePngMemory を使用する。
+    if (pngle == nullptr) {
+      pngle = lgfx_pngle_new();
+    }
     if (pngle == nullptr) { return false; }
 
     prepareTmpTransaction(data);
@@ -2900,7 +3290,6 @@ namespace lgfx
 
     if (lgfx_pngle_prepare(pngle, image_decoder_t::read_data, &png) < 0)
     {
-      lgfx_pngle_destroy(pngle);
       return false;
     }
 
@@ -2916,7 +3305,6 @@ namespace lgfx
                   , datum
                   , lgfx_pngle_get_width(pngle), lgfx_pngle_get_height(pngle)))
     {
-      lgfx_pngle_destroy(pngle);
       return true;
     }
 
@@ -2945,7 +3333,6 @@ namespace lgfx
       heap_free(png.lineBuffer);
     }
     png.end();
-    lgfx_pngle_destroy(pngle);
 
     return res < 0 ? false : true;
   }
