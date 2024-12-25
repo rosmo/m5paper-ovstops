@@ -235,7 +235,9 @@ WeatherView::WeatherView(OvstopsApplication *app, lv_obj_t *parent) {
     for (auto const& o : boxes) {
         lv_obj_add_style(o.first, const_cast<lv_style_t*>(o.second), 0);
         lv_obj_set_flex_flow(o.first, LV_FLEX_FLOW_COLUMN);
-        lv_obj_set_size(o.first, 90, 100);
+        lv_obj_set_flex_align(o.first, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_size(o.first, LV_SIZE_CONTENT, 100);
+        lv_obj_set_style_pad_left(o.first, 10, LV_PART_MAIN);
     }
 
     rainLabel = lv_label_create(rainBox);
@@ -253,7 +255,7 @@ WeatherView::WeatherView(OvstopsApplication *app, lv_obj_t *parent) {
     for (auto const& o : labels) {
         lv_obj_align(o.first, LV_ALIGN_CENTER, 0, 0);
         lv_obj_add_style(o.first, const_cast<lv_style_t*>(o.second), 0);
-        lv_obj_set_size(o.first, LV_PCT(100), 50);
+        lv_obj_set_size(o.first, LV_SIZE_CONTENT, 50);
         lv_obj_set_style_text_align(o.first, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     }
 
@@ -272,12 +274,14 @@ WeatherView::WeatherView(OvstopsApplication *app, lv_obj_t *parent) {
     for (auto const& o : subLabels) {
         lv_obj_align(o.first, LV_ALIGN_CENTER, 0, 0);
         lv_obj_add_style(o.first, const_cast<lv_style_t*>(o.second), 0);
-        lv_obj_set_size(o.first, LV_PCT(100), 30);
+        lv_obj_set_size(o.first, LV_SIZE_CONTENT, 30);
         lv_obj_set_style_text_align(o.first, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     }
 
     infoBox = lv_obj_create(weatherContainer);
     lv_obj_add_style(infoBox, &app->infoBoxStyle, 0);
+    lv_obj_set_style_pad_top(infoBox, 5, LV_PART_MAIN);
+    lv_obj_set_style_pad_left(infoBox, 10, LV_PART_MAIN);
     lv_obj_set_flex_flow(infoBox, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_grow(infoBox, 1);
 
