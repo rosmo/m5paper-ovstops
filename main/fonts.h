@@ -1,3 +1,4 @@
+#include "alegreya24.h"
 #include "alegreya32.h"
 #include "alegreya36.h"
 #include "alegreya40.h"

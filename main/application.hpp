@@ -43,6 +43,36 @@ class LineView {
         std::vector<lv_obj_t*> nextDifferences;
 };
 
+class WeatherView {
+    public:
+        WeatherView(OvstopsApplication *app, lv_obj_t *parent);
+        void UpdateWeather(WeatherData *weatherData);
+        ~WeatherView();
+
+    protected:
+        lv_obj_t *root;
+        lv_obj_t *top;
+        lv_obj_t *topLeft;
+        lv_obj_t *topRight;
+        lv_obj_t *status;
+
+        lv_obj_t *weatherContainer;
+        lv_obj_t *tempBox;
+        lv_obj_t *windBox;
+        lv_obj_t *rainBox;
+        lv_obj_t *infoBox;
+
+        lv_obj_t *timeLabel;
+        lv_obj_t *rainLabel;
+        lv_obj_t *rainSubLabel;
+        lv_obj_t *tempLabel;
+        lv_obj_t *tempSubLabel;
+        lv_obj_t *windLabel;
+        lv_obj_t *windSubLabel;
+        lv_obj_t *descriptionLabel;
+        lv_obj_t *stationLabel;
+};
+
 class Application {
     public:
         Application() { 
@@ -67,8 +97,6 @@ class Application {
     protected:
         lv_obj_t *screen = NULL;
         lv_obj_t *errorScreen = NULL;
-
-
 };
 
 class OvstopsApplication : Application {
@@ -90,6 +118,20 @@ class OvstopsApplication : Application {
         lv_style_t estimatedStyle;
         lv_style_t differenceStyle;
 
+        lv_style_t tempBoxStyle;
+        lv_style_t tempStyle;
+        lv_style_t tempLegendStyle;
+        lv_style_t rainBoxStyle;
+        lv_style_t rainStyle;
+        lv_style_t rainLegendStyle;
+        lv_style_t windBoxStyle;
+        lv_style_t windStyle;
+        lv_style_t windLegendStyle;
+        
+        lv_style_t infoBoxStyle;
+        lv_style_t stationNameStyle;
+        lv_style_t descriptionStyle;
+
         lv_style_t errorStyle;
 
     protected:
@@ -97,6 +139,7 @@ class OvstopsApplication : Application {
 
     private:
         std::map<std::string, LineView*> lines;
+        WeatherView *weather;
 
         void setupStyles();
         void updateData();

@@ -1,4 +1,5 @@
 #include <nvs.h>
+#include "nvs_flash.h"
 
 class NonVolatileConfig {
     public:

@@ -15,6 +15,64 @@
 #ifndef __DATA_H
 #define __DATA_H
 
+class WeatherData {
+    public:
+        WeatherData(cJSON *weather);
+        ~WeatherData();
+
+        void Print();
+
+        char *GetTime() { return time; }
+        char *GetDate() { return date; }
+        // Returned in units of mm/h
+        double GetPrecipitation() { return mmh; } 
+
+        char *GetDescription() { return description; }
+        char *GetRegion() { return region; }
+        char *GetStationName() { return station; }
+        double GetTemperature() { return temperature; }
+        double GetFeelsLikeTemperature() { return feeltemperature; }
+        double GetWindSpeed() { return windspeed; }
+
+        char *GetFormattedTemperature() {
+            if (temperature > 0.0) {
+                snprintf(formattedTemperature, sizeof(formattedTemperature)-1, "+%.1f°", temperature);
+            } else if (temperature < 0.0) {
+                snprintf(formattedTemperature, sizeof(formattedTemperature)-1, "-%.1f°", temperature);
+            } else {
+                snprintf(formattedTemperature, sizeof(formattedTemperature)-1, "%.1f°", temperature);
+            }
+            return formattedTemperature;
+        }
+
+        char *GetFormattedWindspeed() {
+            snprintf(formattedWindspeed, sizeof(formattedWindspeed)-1, "%.0f", windspeed);
+            return formattedWindspeed;
+        }
+
+        char *GetFormattedMmh() {
+            snprintf(formattedMmh, sizeof(formattedMmh)-1, "%.1f", mmh);
+            return formattedMmh;
+        }
+
+    private:
+        char *time;
+        char *date;
+        double mmh;
+
+        char *description;
+        char *region;
+        char *station;
+
+        char formattedTemperature[8];
+        char formattedWindspeed[8];
+        char formattedMmh[8];
+
+        double temperature;
+        double feeltemperature;
+        double windspeed;      
+};
+
 class StopData {
     public:
         StopData(cJSON *stop);
@@ -84,7 +142,8 @@ class StopsData {
         void SetNotifyTask(TaskHandle_t task_);
 
         std::map<std::string, std::vector<StopData*>> *GetData();
-        
+        virtual WeatherData *GetWeather() { return weather; };
+
     private:
         static void Loop(void *ptr);
         esp_err_t Load();
@@ -94,6 +153,7 @@ class StopsData {
         TaskHandle_t task;
         std::map<std::string, std::vector<StopData*>> data; 
         bool loaded = false;
+        WeatherData *weather;
 
         static bool compareTime(StopData *s1, StopData *s2) 
         { 

@@ -33,7 +33,35 @@ void OvstopsApplication::setupStyles() {
     }
     
     lv_style_set_border_width(&devStyle, 3);
+
+    lv_style_set_bg_color(&rainBoxStyle, lv_color_white());
+    lv_style_set_bg_opa(&rainBoxStyle, LV_OPA_100);
+    lv_style_set_bg_color(&windBoxStyle, lv_color_white());
+    lv_style_set_bg_opa(&windBoxStyle, LV_OPA_100);
+    lv_style_set_bg_color(&tempBoxStyle, lv_color_white());
+    lv_style_set_bg_opa(&tempBoxStyle, LV_OPA_100);
+    lv_style_set_bg_color(&infoBoxStyle, lv_color_white());
+    lv_style_set_bg_opa(&infoBoxStyle, LV_OPA_100);
+
+    lv_style_set_text_font(&rainStyle, APP_FONT_BOLD(42));
+    lv_style_set_text_color(&rainStyle, lv_color_black());
+    lv_style_set_text_font(&windStyle, APP_FONT_BOLD(42));
+    lv_style_set_text_color(&windStyle, lv_color_black());
+    lv_style_set_text_font(&tempStyle, APP_FONT_BOLD(42));
+    lv_style_set_text_color(&tempStyle, lv_color_black());
+
+    lv_style_set_text_font(&rainLegendStyle, APP_FONT(24));
+    lv_style_set_text_color(&rainLegendStyle, lv_color_black());
+    lv_style_set_text_font(&windLegendStyle, APP_FONT(24));
+    lv_style_set_text_color(&windLegendStyle, lv_color_black());
+    lv_style_set_text_font(&tempLegendStyle, APP_FONT(24));
+    lv_style_set_text_color(&tempLegendStyle, lv_color_black());
     
+    lv_style_set_text_font(&stationNameStyle, APP_FONT_BOLD(32));
+    lv_style_set_text_color(&stationNameStyle, lv_color_black());
+    lv_style_set_text_font(&descriptionStyle, APP_FONT(32));
+    lv_style_set_text_color(&descriptionStyle, lv_color_black());
+
     lv_style_set_text_font(&lineNumberStyle, APP_FONT_BOLD(96));
     lv_style_set_border_width(&lineNumberStyle, 2);
     lv_style_set_text_color(&lineNumberStyle, lv_color_white());
@@ -181,12 +209,112 @@ void LineView::UpdateData(std::vector<StopData*> stopData) {
     }
 }
 
-
 LineView::~LineView() {
     ESP_LOGI(TAG, "LineView destructor");
 }
 
+WeatherView::WeatherView(OvstopsApplication *app, lv_obj_t *parent) {    
+    root = lv_obj_create(parent);
+    lv_obj_set_size(root, LV_PCT(100), 100);
+    lv_obj_set_style_pad_left(root, 10, LV_PART_MAIN);
+    lv_obj_set_style_pad_right(root, 5, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(root, 5, LV_PART_MAIN);
+
+    weatherContainer = lv_obj_create(root);
+    lv_obj_set_flex_flow(weatherContainer, LV_FLEX_FLOW_ROW);
+    lv_obj_set_size(weatherContainer, LV_PCT(100), LV_PCT(100));
+
+    tempBox = lv_obj_create(weatherContainer);
+    rainBox = lv_obj_create(weatherContainer);
+    windBox = lv_obj_create(weatherContainer);
+    std::map<lv_obj_t*, lv_style_t*> boxes = {
+        { tempBox, &app->rainBoxStyle },
+        { rainBox, &app->tempBoxStyle },
+        { windBox, &app->windBoxStyle },
+    };
+    for (auto const& o : boxes) {
+        lv_obj_add_style(o.first, const_cast<lv_style_t*>(o.second), 0);
+        lv_obj_set_flex_flow(o.first, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_size(o.first, 90, 100);
+    }
+
+    rainLabel = lv_label_create(rainBox);
+    lv_label_set_text(rainLabel, "2.7");
+    windLabel = lv_label_create(windBox);
+    lv_label_set_text(windLabel, "48");
+    tempLabel = lv_label_create(tempBox);
+    lv_label_set_text(tempLabel, "+5°");
+
+    std::map<lv_obj_t*, lv_style_t*> labels = {
+        { rainLabel, &app->rainStyle },
+        { tempLabel, &app->tempStyle },
+        { windLabel, &app->windStyle },
+    };
+    for (auto const& o : labels) {
+        lv_obj_align(o.first, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_add_style(o.first, const_cast<lv_style_t*>(o.second), 0);
+        lv_obj_set_size(o.first, LV_PCT(100), 50);
+        lv_obj_set_style_text_align(o.first, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    }
+
+    tempSubLabel = lv_label_create(tempBox);
+    lv_label_set_text(tempSubLabel, "celsius");
+    rainSubLabel = lv_label_create(rainBox);
+    lv_label_set_text(rainSubLabel, "mm/h");
+    windSubLabel = lv_label_create(windBox);
+    lv_label_set_text(windSubLabel, "m/s");
+
+    std::map<lv_obj_t*, lv_style_t*> subLabels = {
+        { rainSubLabel, &app->rainLegendStyle },
+        { tempSubLabel, &app->tempLegendStyle },
+        { windSubLabel, &app->windLegendStyle },
+    };
+    for (auto const& o : subLabels) {
+        lv_obj_align(o.first, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_add_style(o.first, const_cast<lv_style_t*>(o.second), 0);
+        lv_obj_set_size(o.first, LV_PCT(100), 30);
+        lv_obj_set_style_text_align(o.first, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    }
+
+    infoBox = lv_obj_create(weatherContainer);
+    lv_obj_add_style(infoBox, &app->infoBoxStyle, 0);
+    lv_obj_set_flex_flow(infoBox, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_grow(infoBox, 1);
+
+    stationLabel = lv_label_create(infoBox);
+    lv_label_set_text(stationLabel, "Amsterdam");
+    lv_label_set_long_mode(stationLabel, LV_LABEL_LONG_DOT);
+    lv_obj_align(stationLabel, LV_ALIGN_TOP_LEFT, 0, 0);
+    lv_obj_add_style(stationLabel, &app->stationNameStyle, 0);
+    lv_obj_set_style_text_align(stationLabel, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+
+    descriptionLabel = lv_label_create(infoBox);
+    lv_label_set_text(descriptionLabel, "Huge firestorms");
+    lv_label_set_long_mode(descriptionLabel, LV_LABEL_LONG_DOT);
+    lv_obj_align(descriptionLabel, LV_ALIGN_TOP_LEFT, 0, 0);
+    lv_obj_add_style(descriptionLabel, &app->descriptionStyle, 0);
+    lv_obj_set_style_text_align(descriptionLabel, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+}
+
+void WeatherView::UpdateWeather(WeatherData *weatherData) {
+    ESP_LOGI(TAG, "Updating weather data");
+    lv_label_set_text(tempLabel, weatherData->GetFormattedTemperature());
+    lv_label_set_text(windLabel, weatherData->GetFormattedWindspeed());
+    lv_label_set_text(rainLabel, weatherData->GetFormattedMmh());
+    lv_label_set_text(stationLabel, weatherData->GetStationName());
+    lv_label_set_text(descriptionLabel, weatherData->GetDescription());
+}
+
+WeatherView::~WeatherView() {
+    ESP_LOGI(TAG, "WeatherView destructor");
+}
+
 void OvstopsApplication::updateData() {
+    WeatherData *weatherData = stopsData.GetWeather();
+    if (weatherData != NULL) {
+        ESP_LOGI(TAG, "Updating weather data...");
+        weather->UpdateWeather(weatherData);
+    }
     std::map<std::string, std::vector<StopData*>> *linesData = stopsData.GetData();
     if (linesData == NULL) {
         ESP_LOGW(TAG, "Line data not loaded...");
@@ -232,6 +360,8 @@ bool OvstopsApplication::setup() {
     lv_obj_set_flex_flow(rootContainer, LV_FLEX_FLOW_COLUMN);
     // lv_obj_set_flex_align(rootContainer, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_SPACE_AROUND);
     
+    weather = new WeatherView(this, rootContainer);
+
     return true;
 }
 

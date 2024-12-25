@@ -104,6 +104,44 @@ esp_err_t StopsData::HttpEventHandler(esp_http_client_event_t *evt)
     return ESP_OK;
 }
 
+WeatherData::WeatherData(cJSON *weather) {
+    cJSON *time_ = cJSON_GetObjectItemCaseSensitive(weather, "time");
+    cJSON *date_ = cJSON_GetObjectItemCaseSensitive(weather, "date");
+    cJSON *mmh_ = cJSON_GetObjectItemCaseSensitive(weather, "mmh");
+
+    time = time_ != NULL ? strdup(time_->valuestring) : strdup("");
+    date = date_ != NULL ? strdup(date_->valuestring) : strdup("");
+    mmh = mmh_ != NULL ? mmh_->valuedouble : 0.0;
+
+    cJSON *description_ = cJSON_GetObjectItemCaseSensitive(weather, "weatherdescription");
+    cJSON *station_ = cJSON_GetObjectItemCaseSensitive(weather, "name");
+    cJSON *region_ = cJSON_GetObjectItemCaseSensitive(weather, "regio");
+    cJSON *temperature_ = cJSON_GetObjectItemCaseSensitive(weather, "temperature");
+    cJSON *feeltemperature_ = cJSON_GetObjectItemCaseSensitive(weather, "feeltemperature");
+    cJSON *windspeed_ = cJSON_GetObjectItemCaseSensitive(weather, "windspeed");
+
+    description = description_ != NULL ? strdup(description_->valuestring) : strdup("");
+    station = station_ != NULL ? strdup(station_->valuestring) : strdup("");
+    region = region_ != NULL ? strdup(region_->valuestring) : strdup("");
+    temperature = temperature_ != NULL ? temperature_->valuedouble : 0.0;
+    feeltemperature = feeltemperature_ != NULL ? feeltemperature_->valuedouble : 0.0;
+    windspeed = windspeed_ != NULL ? windspeed_->valuedouble : 0.0;
+}
+
+WeatherData::~WeatherData() {
+    ESP_LOGI(TAG, "~WeatherData()");
+    free(time);
+    free(date);
+    free(description);
+    free(station);
+    free(region);
+}
+
+void WeatherData::Print() {
+    ESP_LOGI(TAG, "Region: %s (%s) - %s - time: %s (date %s) - %f C, %f mm/h, wind %f m/s", region, station, description, time, date, temperature, mmh, windspeed);
+}
+
+
 StopData::StopData(cJSON *stop) {
     cJSON *lineNo_ = cJSON_GetObjectItemCaseSensitive(stop, "line_no");
     cJSON *lineName_ = cJSON_GetObjectItemCaseSensitive(stop, "line");
@@ -197,14 +235,22 @@ esp_err_t StopsData::Load()
             cJSON *ride;
             std::string stopKey(stop->string);
             ESP_LOGI(TAG, "Line key: %s", stopKey.c_str());
-            data[stopKey] = std::vector<StopData*>();
-            cJSON_ArrayForEach(ride, stop)
-            {
-                data[stopKey].push_back(new StopData(ride));
-            }
-            std::sort(data[stopKey].begin(), data[stopKey].end(), compareTime); 
-            for (auto const& stop : data[stopKey]) {
-                    stop->Print();
+
+            if (stopKey == "weather") {
+                ESP_LOGI(TAG, "Received weather data");
+                weather = new WeatherData(stop);
+                ESP_LOGI(TAG, "Weather forecast is:");
+                weather->Print();
+            } else {
+                data[stopKey] = std::vector<StopData*>();
+                cJSON_ArrayForEach(ride, stop)
+                {
+                    data[stopKey].push_back(new StopData(ride));
+                }
+                std::sort(data[stopKey].begin(), data[stopKey].end(), compareTime); 
+                for (auto const& stop : data[stopKey]) {
+                        stop->Print();
+                }
             }
         }
         cJSON_Delete(root);

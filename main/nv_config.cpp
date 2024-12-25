@@ -10,6 +10,8 @@
     }
 
 esp_err_t NonVolatileConfig::loadNonvolatileConfiguration() {
+    nvs_flash_init();
+
     nvs_handle nvs_arg = (nvs_handle)0;
     char buf[128];
     size_t length = sizeof(buf) / sizeof(char);

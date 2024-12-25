@@ -4,7 +4,7 @@ all: clean fonts fonts-bold
 FONT_PATH ?= /mnt/c/Users/rosmo/Downloads
 FONT ?= AlegreyaSans-Medium.ttf
 FONT_NAME ?= alegreya
-SIZES := 32 36 40
+SIZES := 24 32 36 40
 
 BOLD_FONT ?= AlegreyaSans-Bold.ttf
 BOLD_FONT_NAME ?= alegreya_bold
