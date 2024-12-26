@@ -82,7 +82,7 @@ bool M5_LVGL::initialize(int rotation) {
     gfx->touch()->wakeup();
     gfx->setBrightness(128);
 
-    gfx->setEpdMode(epd_mode_t::epd_fast);  
+    gfx->setEpdMode(epd_mode_t::epd_text);  
     
     // gfx->setRotation(rotation);
 

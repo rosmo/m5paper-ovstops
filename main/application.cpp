@@ -33,14 +33,20 @@ void OvstopsApplication::setupStyles() {
     }
     
     lv_style_set_border_width(&devStyle, 3);
+    lv_style_set_text_font(&devStyle, APP_FONT(24));
 
-    lv_style_set_bg_color(&rainBoxStyle, lv_color_white());
+    lv_color_t grey = lv_color_make(222, 222, 222);
+
+    lv_style_set_bg_color(&weatherContainerStyle, lv_color_white());
+    lv_style_set_bg_opa(&weatherContainerStyle, LV_OPA_100);
+
+    lv_style_set_bg_color(&rainBoxStyle, grey);
     lv_style_set_bg_opa(&rainBoxStyle, LV_OPA_100);
-    lv_style_set_bg_color(&windBoxStyle, lv_color_white());
+    lv_style_set_bg_color(&windBoxStyle, grey);
     lv_style_set_bg_opa(&windBoxStyle, LV_OPA_100);
-    lv_style_set_bg_color(&tempBoxStyle, lv_color_white());
+    lv_style_set_bg_color(&tempBoxStyle, grey);
     lv_style_set_bg_opa(&tempBoxStyle, LV_OPA_100);
-    lv_style_set_bg_color(&infoBoxStyle, lv_color_white());
+    lv_style_set_bg_color(&infoBoxStyle, grey);
     lv_style_set_bg_opa(&infoBoxStyle, LV_OPA_100);
 
     lv_style_set_text_font(&rainStyle, APP_FONT_BOLD(42));
@@ -59,7 +65,7 @@ void OvstopsApplication::setupStyles() {
     
     lv_style_set_text_font(&stationNameStyle, APP_FONT_BOLD(32));
     lv_style_set_text_color(&stationNameStyle, lv_color_black());
-    lv_style_set_text_font(&descriptionStyle, APP_FONT(32));
+    lv_style_set_text_font(&descriptionStyle, APP_FONT(24));
     lv_style_set_text_color(&descriptionStyle, lv_color_black());
 
     lv_style_set_text_font(&lineNumberStyle, APP_FONT_BOLD(96));
@@ -189,6 +195,7 @@ LineView::LineView(OvstopsApplication *app, lv_obj_t *parent) {
 }
 
 void LineView::UpdateData(std::vector<StopData*> stopData) {
+    ESP_LOGI(TAG, "Data update start: %d lines", stopData.size());
     if (stopData.size() >= 1) {
         StopData *stop = stopData.at(0);
         lv_label_set_text(lineLabel, stop->GetLineNo());
@@ -207,6 +214,7 @@ void LineView::UpdateData(std::vector<StopData*> stopData) {
             lv_label_set_text(nextDifferences[i - 1], stop->GetTimeDifference());
         }
     }
+    ESP_LOGI(TAG, "Data updated.");
 }
 
 LineView::~LineView() {
@@ -215,14 +223,17 @@ LineView::~LineView() {
 
 WeatherView::WeatherView(OvstopsApplication *app, lv_obj_t *parent) {    
     root = lv_obj_create(parent);
-    lv_obj_set_size(root, LV_PCT(100), 100);
+    lv_obj_set_size(root, LV_PCT(100), 110);
     lv_obj_set_style_pad_left(root, 10, LV_PART_MAIN);
     lv_obj_set_style_pad_right(root, 5, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(root, 5, LV_PART_MAIN);
+    //lv_obj_set_style_pad_top(root, 5, LV_PART_MAIN);
+    // lv_obj_set_style_pad_bottom(root, 10, LV_PART_MAIN);
 
     weatherContainer = lv_obj_create(root);
     lv_obj_set_flex_flow(weatherContainer, LV_FLEX_FLOW_ROW);
     lv_obj_set_size(weatherContainer, LV_PCT(100), LV_PCT(100));
+    lv_obj_add_style(weatherContainer, &app->weatherContainerStyle, 0);
+    // lv_obj_add_style(weatherContainer, &app->devStyle, 0);
 
     tempBox = lv_obj_create(weatherContainer);
     rainBox = lv_obj_create(weatherContainer);
@@ -239,6 +250,7 @@ WeatherView::WeatherView(OvstopsApplication *app, lv_obj_t *parent) {
         lv_obj_set_size(o.first, LV_SIZE_CONTENT, 100);
         lv_obj_set_style_pad_left(o.first, 10, LV_PART_MAIN);
     }
+    lv_obj_set_style_pad_right(windBox, 10, LV_PART_MAIN);
 
     rainLabel = lv_label_create(rainBox);
     lv_label_set_text(rainLabel, "2.7");
@@ -280,10 +292,10 @@ WeatherView::WeatherView(OvstopsApplication *app, lv_obj_t *parent) {
 
     infoBox = lv_obj_create(weatherContainer);
     lv_obj_add_style(infoBox, &app->infoBoxStyle, 0);
-    lv_obj_set_style_pad_top(infoBox, 5, LV_PART_MAIN);
     lv_obj_set_style_pad_left(infoBox, 10, LV_PART_MAIN);
     lv_obj_set_flex_flow(infoBox, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_grow(infoBox, 1);
+    lv_obj_set_flex_align(infoBox, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_size(infoBox, LV_PCT(100), 100);
 
     stationLabel = lv_label_create(infoBox);
     lv_label_set_text(stationLabel, "Amsterdam");

@@ -118,6 +118,7 @@ class OvstopsApplication : Application {
         lv_style_t estimatedStyle;
         lv_style_t differenceStyle;
 
+        lv_style_t weatherContainerStyle;
         lv_style_t tempBoxStyle;
         lv_style_t tempStyle;
         lv_style_t tempLegendStyle;
