@@ -19,7 +19,7 @@
 #include "network.hpp"
 #include "syslog.hpp"
 
-#include "m5epd_lvgl.h"
+#include "m5epd_lvgl.hpp"
 
 #define TAG "Main"
 
@@ -44,6 +44,8 @@ void heap_caps_alloc_failed_hook(size_t requested_size, uint32_t caps, const cha
 
 extern "C" void app_main(void) {
     heap_caps_register_failed_alloc_callback(heap_caps_alloc_failed_hook);
+
+    printf("Built with ESP-IDF: %s\n", esp_get_idf_version());
 
     /* Print chip information */
     esp_chip_info_t chip_info;

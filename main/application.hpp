@@ -1,4 +1,4 @@
-#include "m5epd_lvgl.h"
+#include "m5epd_lvgl.hpp"
 #include "data.hpp"
 
 #ifndef __APPLICATION_H

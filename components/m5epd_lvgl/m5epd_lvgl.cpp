@@ -1,4 +1,4 @@
-#include "m5epd_lvgl.h"
+#include "m5epd_lvgl.hpp"
 
 bool M5_LVGL::initialized = false;
 lgfx::Panel_IT8951 *p = new lgfx::Panel_IT8951();
@@ -12,7 +12,7 @@ void M5_LVGL::refresh() {
 }
 
 void displayFlush(lv_disp_drv_t* disp, const lv_area_t* area, lv_color_t* color_p) {
-    LGFX *_gfx = (LGFX *)disp->user_data;
+    lgfx::LGFX *_gfx = (LGFX *)disp->user_data;
 
     const u_long w = area->x2 - area->x1 + 1;
     const u_long h = area->y2 - area->y1 + 1;
@@ -34,7 +34,7 @@ void displayFlush(lv_disp_drv_t* disp, const lv_area_t* area, lv_color_t* color_
 
 void touchInput(lv_indev_drv_t *drv, lv_indev_data_t *data)
 {
-    LGFX *_gfx = (LGFX *)drv->user_data;
+    lgfx::LGFX *_gfx = (LGFX *)drv->user_data;
     lgfx::touch_point_t tp;
     uint8_t count;
     static int32_t x, y;
@@ -74,7 +74,7 @@ void M5_LVGL::timer(int ticks) {
 //}
 
 bool M5_LVGL::initialize(int rotation) {
-    gfx = new LGFX();
+    gfx = new lgfx::LGFX();
     if (!gfx->init()) {
         printf("LovyanGFX initialization failed!\n");
         return false;

@@ -1,6 +1,9 @@
 ## IDF Component Manager Manifest File
 dependencies:
   lvgl/lvgl: "^8.3.0"
+  #LovyanGFX:
+  #  git: https://github.com/lovyan03/LovyanGFX.git
+  #  version: develop
   # espressif/arduino-esp32: "*"
   ## Required IDF version
   idf:

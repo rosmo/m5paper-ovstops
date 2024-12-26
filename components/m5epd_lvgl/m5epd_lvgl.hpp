@@ -2,7 +2,6 @@
 #define __M5EPD_H
 #define LGFX_M5PAPER
 #define LGFX_AUTODETECT
-#define LGFX_USE_V1
 #include <stdio.h>
 #include <inttypes.h>
 
